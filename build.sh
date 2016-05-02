@@ -125,7 +125,7 @@ build_native()
 
     # Regenerate the CMake solution
     echo "Invoking cmake with arguments: \"$__nativeroot\" $__CMakeArgs $__CMakeExtraArgs"
-    "$__nativeroot/gen-buildsys-clang.sh" "$__nativeroot" $__ClangMajorVersion $__ClangMinorVersion $__BuildArch $__CMakeArgs "$__CMakeExtraArgs"
+    "$__nativeroot/gen-buildsys-clang.sh" "$__nativeroot" $__ClangMajorVersion $__ClangMinorVersion $__BuildArch $__CMakeArgs $__CMakeStaticCurl "$__CMakeExtraArgs"
 
     # Check that the makefiles were created.
 
@@ -249,6 +249,7 @@ esac
 __BuildOS=$__HostOS
 __BuildType=Debug
 __CMakeArgs=DEBUG
+__CMakeStaticCurl=0
 __CMakeExtraArgs=""
 
 BUILDERRORLEVEL=0
@@ -304,6 +305,9 @@ while :; do
         verbose)
             __VerboseBuild=1
             ;;
+	staticcurl)
+	    __CMakeStaticCurl=1
+	    ;;
         clang3.5)
             __ClangMajorVersion=3
             __ClangMinorVersion=5
