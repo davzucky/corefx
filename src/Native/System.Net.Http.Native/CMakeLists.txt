@@ -33,6 +33,7 @@ include_directories(SYSTEM ${CURL_INCLUDE_DIR})
 add_library(System.Net.Http.Native
     SHARED
     ${NATIVEHTTP_SOURCES}
+    ${VERSION_FILE_PATH}
 )
 
 MESSAGE("CURL_LIBRARIES :" ${CURL_LIBRARIES})
@@ -40,4 +41,4 @@ target_link_libraries(System.Net.Http.Native
   ${CURL_LIBRARIES}
 )
 
-install (TARGETS System.Net.Http.Native DESTINATION .)
+install_library_and_symbols (System.Net.Http.Native)

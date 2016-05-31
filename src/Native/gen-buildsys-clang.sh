@@ -65,6 +65,9 @@ if [[ -n "$CROSSCOMPILE" ]]; then
     cmake_extra_defines="$cmake_extra_defines -C $project_root/cross/$build_arch/tryrun.cmake"
     cmake_extra_defines="$cmake_extra_defines -DCMAKE_TOOLCHAIN_FILE=$project_root/cross/$build_arch/toolchain.cmake"
 fi
+if [ "$build_arch" == "arm-softfp" ]; then
+    cmake_extra_defines="$cmake_extra_defines -DARM_SOFTFP=1"
+fi
 
 if [ -z "$6" ]
 then

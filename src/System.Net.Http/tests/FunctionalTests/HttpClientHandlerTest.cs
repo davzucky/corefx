@@ -14,6 +14,7 @@ using System.Threading.Tasks;
 
 using Xunit;
 using Xunit.Abstractions;
+using System.Net.Sockets;
 
 namespace System.Net.Http.Functional.Tests
 {
@@ -36,15 +37,24 @@ namespace System.Net.Http.Functional.Tests
             new object[] { "X-Cust-Header-NoValue", "" , HttpTestServers.RemoteEchoServer },
             new object[] { "X-CustomHeader", "x-value", HttpTestServers.RedirectUriForDestinationUri(
                 secure:false,
+                statusCode:302,
                 destinationUri:HttpTestServers.RemoteEchoServer,
                 hops:1) },
             new object[] { "X-Cust-Header-NoValue", "" , HttpTestServers.RedirectUriForDestinationUri(
                 secure:false,
+                statusCode:302,
                 destinationUri:HttpTestServers.RemoteEchoServer,
                 hops:1) },
         };
         public readonly static object[][] Http2Servers = HttpTestServers.Http2Servers;
 
+        public readonly static object[][] RedirectStatusCodes = {
+            new object[] { 300 },
+            new object[] { 301 },
+            new object[] { 302 },
+            new object[] { 303 },
+            new object[] { 307 }
+        };
 
         // Standard HTTP methods defined in RFC7231: http://tools.ietf.org/html/rfc7231#section-4.3
         //     "GET", "HEAD", "POST", "PUT", "DELETE", "OPTIONS", "TRACE"
@@ -94,6 +104,7 @@ namespace System.Net.Http.Functional.Tests
                 // Changes from .NET Framework (Desktop).
                 Assert.Equal(DecompressionMethods.GZip | DecompressionMethods.Deflate, handler.AutomaticDecompression);
                 Assert.Equal(0, handler.MaxRequestContentBufferSize);
+                Assert.NotNull(handler.Properties);
             }
         }
 
@@ -134,6 +145,29 @@ namespace System.Net.Http.Functional.Tests
             }
         }
 
+        [Fact]
+        public void Properties_Get_CountIsZero()
+        {
+            var handler = new HttpClientHandler();
+            IDictionary<String, object> dict = handler.Properties;
+            Assert.Same(dict, handler.Properties);
+            Assert.Equal(0, dict.Count);
+        }
+
+        [Fact]
+        public void Properties_AddItemToDictionary_ItemPresent()
+        {
+            var handler = new HttpClientHandler();
+            IDictionary<String, object> dict = handler.Properties;
+
+            var item = new Object();
+            dict.Add("item", item);
+
+            object value;
+            Assert.True(dict.TryGetValue("item", out value));
+            Assert.Equal(item, value);
+        }
+
         [Theory, MemberData(nameof(EchoServers))]
         public async Task SendAsync_SimpleGet_Success(Uri remoteServer)
         {
@@ -148,6 +182,33 @@ namespace System.Net.Http.Functional.Tests
                         response.Content.Headers.ContentMD5,
                         false,
                         null);                    
+                }
+            }
+        }
+
+        [Theory]
+        [MemberData(nameof(GetAsync_IPBasedUri_Success_MemberData))]
+        public async Task GetAsync_IPBasedUri_Success(IPAddress address)
+        {
+            using (var client = new HttpClient())
+            {
+                var options = new LoopbackServer.Options { Address = address };
+                await LoopbackServer.CreateServerAsync(async (server, url) =>
+                {
+                    await TestHelper.WhenAllCompletedOrAnyFailed(
+                        LoopbackServer.ReadRequestAndSendResponseAsync(server, options: options),
+                        client.GetAsync(url));
+                }, options);
+            }
+        }
+
+        public static IEnumerable<object[]> GetAsync_IPBasedUri_Success_MemberData()
+        {
+            foreach (var addr in new[] { IPAddress.Loopback, IPAddress.IPv6Loopback, LoopbackServer.GetIPv6LinkLocalAddress() })
+            {
+                if (addr != null)
+                {
+                    yield return new object[] { addr };
                 }
             }
         }
@@ -261,8 +322,8 @@ namespace System.Net.Http.Functional.Tests
             }
         }
 
-        [Fact]
-        public async Task GetAsync_AllowAutoRedirectFalse_RedirectFromHttpToHttp_StatusCodeRedirect()
+        [Theory, MemberData(nameof(RedirectStatusCodes))]
+        public async Task GetAsync_AllowAutoRedirectFalse_RedirectFromHttpToHttp_StatusCodeRedirect(int statusCode)
         {
             var handler = new HttpClientHandler();
             handler.AllowAutoRedirect = false;
@@ -270,18 +331,19 @@ namespace System.Net.Http.Functional.Tests
             {
                 Uri uri = HttpTestServers.RedirectUriForDestinationUri(
                     secure:false,
+                    statusCode:statusCode,
                     destinationUri:HttpTestServers.RemoteEchoServer,
                     hops:1);
                 _output.WriteLine("Uri: {0}", uri);
                 using (HttpResponseMessage response = await client.GetAsync(uri))
                 {
-                    Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
+                    Assert.Equal(statusCode, (int)response.StatusCode);
                 }
             }
         }
 
-        [Fact]
-        public async Task GetAsync_AllowAutoRedirectTrue_RedirectFromHttpToHttp_StatusCodeOK()
+        [Theory, MemberData(nameof(RedirectStatusCodes))]
+        public async Task GetAsync_AllowAutoRedirectTrue_RedirectFromHttpToHttp_StatusCodeOK(int statusCode)
         {
             var handler = new HttpClientHandler();
             handler.AllowAutoRedirect = true;
@@ -289,6 +351,7 @@ namespace System.Net.Http.Functional.Tests
             {
                 Uri uri = HttpTestServers.RedirectUriForDestinationUri(
                     secure:false,
+                    statusCode:statusCode,
                     destinationUri:HttpTestServers.RemoteEchoServer,
                     hops:1);
                 _output.WriteLine("Uri: {0}", uri);
@@ -308,6 +371,7 @@ namespace System.Net.Http.Functional.Tests
             {
                 Uri uri = HttpTestServers.RedirectUriForDestinationUri(
                     secure:false,
+                    statusCode:302,
                     destinationUri:HttpTestServers.SecureRemoteEchoServer,
                     hops:1);
                 _output.WriteLine("Uri: {0}", uri);
@@ -327,6 +391,7 @@ namespace System.Net.Http.Functional.Tests
             {
                 Uri uri = HttpTestServers.RedirectUriForDestinationUri(
                     secure:true,
+                    statusCode:302,
                     destinationUri:HttpTestServers.RemoteEchoServer,
                     hops:1);
                 _output.WriteLine("Uri: {0}", uri);
@@ -345,7 +410,11 @@ namespace System.Net.Http.Functional.Tests
             Uri targetUri = HttpTestServers.BasicAuthUriForCreds(secure:false, userName:Username, password:Password);
             using (var client = new HttpClient(handler))
             {
-                Uri uri = HttpTestServers.RedirectUriForDestinationUri(secure:false, destinationUri:targetUri, hops:1);
+                Uri uri = HttpTestServers.RedirectUriForDestinationUri(
+                    secure:false,
+                    statusCode:302,
+                    destinationUri:targetUri,
+                    hops:1);
                 _output.WriteLine("Uri: {0}", uri);
                 using (HttpResponseMessage response = await client.GetAsync(uri))
                 {
@@ -365,6 +434,7 @@ namespace System.Net.Http.Functional.Tests
                 await Assert.ThrowsAsync<HttpRequestException>(() => 
                     client.GetAsync(HttpTestServers.RedirectUriForDestinationUri(
                         secure:false,
+                        statusCode:302,
                         destinationUri:HttpTestServers.RemoteEchoServer,
                         hops:(hops + 1))));
             }
@@ -377,7 +447,11 @@ namespace System.Net.Http.Functional.Tests
             handler.Credentials = _credential;
             using (var client = new HttpClient(handler))
             {
-                Uri redirectUri = HttpTestServers.RedirectUriForCreds(secure:false, userName:Username, password:Password);
+                Uri redirectUri = HttpTestServers.RedirectUriForCreds(
+                    secure:false,
+                    statusCode:302,
+                    userName:Username,
+                    password:Password);
                 using (HttpResponseMessage unAuthResponse = await client.GetAsync(redirectUri))
                 {
                     Assert.Equal(HttpStatusCode.Unauthorized, unAuthResponse.StatusCode);
@@ -385,11 +459,15 @@ namespace System.Net.Http.Functional.Tests
             }
        }
 
-        [Fact]
-        public async Task GetAsync_CredentialIsCredentialCacheUriRedirect_StatusCodeOK()
+        [Theory, MemberData(nameof(RedirectStatusCodes))]
+        public async Task GetAsync_CredentialIsCredentialCacheUriRedirect_StatusCodeOK(int statusCode)
         {
             Uri uri = HttpTestServers.BasicAuthUriForCreds(secure:false, userName:Username, password:Password);
-            Uri redirectUri = HttpTestServers.RedirectUriForCreds(secure:false, userName:Username, password:Password);
+            Uri redirectUri = HttpTestServers.RedirectUriForCreds(
+                secure:false,
+                statusCode:statusCode,
+                userName:Username,
+                password:Password);
             _output.WriteLine(uri.AbsoluteUri);
             _output.WriteLine(redirectUri.AbsoluteUri);
             var credentialCache = new CredentialCache();
@@ -446,6 +524,7 @@ namespace System.Net.Http.Functional.Tests
         {
             Uri uri = HttpTestServers.RedirectUriForDestinationUri(
                 secure:false,
+                statusCode:302,
                 destinationUri:HttpTestServers.RemoteEchoServer,
                 hops:1);
             using (HttpClient client = new HttpClient())
@@ -530,31 +609,33 @@ namespace System.Net.Http.Functional.Tests
             var cookie2 = new KeyValuePair<string, string>(".AspNetCore.Session", "RAExEmXpoCbueP_QYM");
             var cookie3 = new KeyValuePair<string, string>("name", "value");
 
-            string url = string.Format(
-                "http://httpbin.org/cookies/set?{0}={1}&{2}={3}&{4}={5}",
-                cookie1.Key,
-                cookie1.Value,
-                cookie2.Key,
-                cookie2.Value,
-                cookie3.Key,
-                cookie3.Value);
-
-            var handler = new HttpClientHandler()
+            await LoopbackServer.CreateServerAsync(async (server, url) =>
             {
-                AllowAutoRedirect = false
-            };
+                using (var handler = new HttpClientHandler())
+                using (var client = new HttpClient(handler))
+                {
+                    Task<HttpResponseMessage> getResponse = client.GetAsync(url);
 
-            using (var client = new HttpClient(handler))
-            using (HttpResponseMessage response = await client.GetAsync(url))
-            {
-                Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
-                CookieCollection cookies = handler.CookieContainer.GetCookies(new Uri(url));
+                    await LoopbackServer.ReadRequestAndSendResponseAsync(server,
+                            $"HTTP/1.1 200 OK\r\n" +
+                            $"Date: {DateTimeOffset.UtcNow:R}\r\n" +
+                            $"Set-Cookie: {cookie1.Key}={cookie1.Value}; Path=/\r\n" +
+                            $"Set-Cookie: {cookie2.Key}={cookie2.Value}; Path=/\r\n" +
+                            $"Set-Cookie: {cookie3.Key}={cookie3.Value}; Path=/\r\n" +
+                            "\r\n");
 
-                Assert.Equal(3, handler.CookieContainer.Count);
-                Assert.Equal(cookie1.Value, cookies[cookie1.Key].Value);
-                Assert.Equal(cookie2.Value, cookies[cookie2.Key].Value);
-                Assert.Equal(cookie3.Value, cookies[cookie3.Key].Value);
-            }
+                    using (HttpResponseMessage response = await getResponse)
+                    {
+                        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+                        CookieCollection cookies = handler.CookieContainer.GetCookies(url);
+
+                        Assert.Equal(3, cookies.Count);
+                        Assert.Equal(cookie1.Value, cookies[cookie1.Key].Value);
+                        Assert.Equal(cookie2.Value, cookies[cookie2.Key].Value);
+                        Assert.Equal(cookie3.Value, cookies[cookie3.Key].Value);
+                    }
+                }
+            });
         }
 
         [Fact]
@@ -600,27 +681,102 @@ namespace System.Net.Http.Functional.Tests
             }
         }
 
-        [ActiveIssue(4259, PlatformID.AnyUnix)]
-        [OuterLoop]
         [Fact]
         public async Task SendAsync_ReadFromSlowStreamingServer_PartialDataReturned()
         {
-            // TODO: This is a placeholder until GitHub Issue #2383 gets resolved.
-            const string SlowStreamingServer = "http://httpbin.org/drip?numbytes=8192&duration=15&delay=1&code=200";
-            
-            int bytesRead;
-            byte[] buffer = new byte[8192];
-            using (var client = new HttpClient())
+            await LoopbackServer.CreateServerAsync(async (server, url) =>
             {
-                var request = new HttpRequestMessage(HttpMethod.Get, SlowStreamingServer);
-                using (HttpResponseMessage response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead))
+                using (var client = new HttpClient())
                 {
-                    Stream stream = await response.Content.ReadAsStreamAsync();
-                    bytesRead = await stream.ReadAsync(buffer, 0, buffer.Length);
+                    Task<HttpResponseMessage> getResponse = client.GetAsync(url, HttpCompletionOption.ResponseHeadersRead);
+
+                    await LoopbackServer.AcceptSocketAsync(server, async (s, stream, reader, writer) =>
+                    {
+                        while (!string.IsNullOrEmpty(reader.ReadLine())) ;
+                        await writer.WriteAsync(
+                            "HTTP/1.1 200 OK\r\n" +
+                            $"Date: {DateTimeOffset.UtcNow:R}\r\n" +
+                            "Content-Length: 16000\r\n" +
+                            "\r\n" +
+                            "less than 16000 bytes");
+
+                        using (HttpResponseMessage response = await getResponse)
+                        {
+                            var buffer = new byte[8000];
+                            using (Stream clientStream = await response.Content.ReadAsStreamAsync())
+                            {
+                                int bytesRead = await clientStream.ReadAsync(buffer, 0, buffer.Length);
+                                _output.WriteLine($"Bytes read from stream: {bytesRead}");
+                                Assert.True(bytesRead < buffer.Length, "bytesRead should be less than buffer.Length");
+                            }
+                        }
+                    });
                 }
-                _output.WriteLine("Bytes read from stream: {0}", bytesRead);
-                Assert.True(bytesRead < buffer.Length, "bytesRead should be less than buffer.Length");
-            }            
+            });
+        }
+
+        [Fact]
+        public async Task Dispose_DisposingHandlerCancelsActiveOperationsWithoutResponses()
+        {
+            await LoopbackServer.CreateServerAsync(async (socket1, url1) =>
+            {
+                await LoopbackServer.CreateServerAsync(async (socket2, url2) =>
+                {
+                    await LoopbackServer.CreateServerAsync(async (socket3, url3) =>
+                    {
+                        var unblockServers = new TaskCompletionSource<bool>(TaskContinuationOptions.RunContinuationsAsynchronously);
+
+                        // First server connects but doesn't send any response yet
+                        Task server1 = LoopbackServer.AcceptSocketAsync(socket1, async (s, stream, reader, writer) =>
+                        {
+                            await unblockServers.Task;
+                        });
+
+                        // Second server connects and sends some but not all headers
+                        Task server2 = LoopbackServer.AcceptSocketAsync(socket2, async (s, stream, reader, writer) =>
+                        {
+                            while (!string.IsNullOrEmpty(await reader.ReadLineAsync())) ;
+                            await writer.WriteAsync($"HTTP/1.1 200 OK\r\n");
+                            await unblockServers.Task;
+                        });
+
+                        // Third server connects and sends all headers and some but not all of the body
+                        Task server3 = LoopbackServer.AcceptSocketAsync(socket3, async (s, stream, reader, writer) =>
+                        {
+                            while (!string.IsNullOrEmpty(await reader.ReadLineAsync())) ;
+                            await writer.WriteAsync($"HTTP/1.1 200 OK\r\nDate: {DateTimeOffset.UtcNow:R}\r\nContent-Length: 20\r\n\r\n");
+                            await writer.WriteAsync("1234567890");
+                            await unblockServers.Task;
+                            await writer.WriteAsync("1234567890");
+                            s.Shutdown(SocketShutdown.Send);
+                        });
+
+                        // Make three requests
+                        Task<HttpResponseMessage> get1, get2;
+                        HttpResponseMessage response3;
+                        using (var client = new HttpClient())
+                        {
+                            get1 = client.GetAsync(url1, HttpCompletionOption.ResponseHeadersRead);
+                            get2 = client.GetAsync(url2, HttpCompletionOption.ResponseHeadersRead);
+                            response3 = await client.GetAsync(url3, HttpCompletionOption.ResponseHeadersRead);
+                        }
+
+                        // Requests 1 and 2 should be canceled as we haven't finished receiving their headers
+                        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => get1);
+                        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => get2);
+
+                        // Request 3 should still be active, and we should be able to receive all of the data.
+                        unblockServers.SetResult(true);
+                        using (response3)
+                        {
+                            Assert.Equal("12345678901234567890", await response3.Content.ReadAsStringAsync());
+                        }
+
+                        try { await Task.WhenAll(server1, server2, server3); }
+                        catch { } // Ignore errors: we expect this may fail, as the clients may hang up on the servers
+                    });
+                });
+            });
         }
 
         #region Post Methods Tests
@@ -666,11 +822,10 @@ namespace System.Net.Http.Functional.Tests
         }
 
         [Theory, MemberData(nameof(VerifyUploadServersStreamsAndExpectedData))]
-        public async Task PostAsync_CallMethod_StreamContent(Uri remoteServer, Stream requestContentStream, byte[] expectedData)
+        public async Task PostAsync_CallMethod_StreamContent(Uri remoteServer, HttpContent content, byte[] expectedData)
         {
             using (var client = new HttpClient())
             {
-                HttpContent content = new StreamContent(requestContentStream);
                 content.Headers.ContentMD5 = TestHelper.ComputeMD5Hash(expectedData);
 
                 using (HttpResponseMessage response = await client.PostAsync(remoteServer, content))
@@ -680,11 +835,42 @@ namespace System.Net.Http.Functional.Tests
             }
         }
 
+        private sealed class StreamContentWithSyncAsyncCopy : StreamContent
+        {
+            private readonly Stream _stream;
+            private readonly bool _syncCopy;
+
+            public StreamContentWithSyncAsyncCopy(Stream stream, bool syncCopy) : base(stream)
+            {
+                _stream = stream;
+                _syncCopy = syncCopy;
+            }
+
+            protected override Task SerializeToStreamAsync(Stream stream, TransportContext context)
+            {
+                if (_syncCopy)
+                {
+                    try
+                    {
+                        _stream.CopyTo(stream, 128); // arbitrary size likely to require multiple read/writes
+                        return Task.CompletedTask;
+                    }
+                    catch (Exception exc)
+                    {
+                        return Task.FromException(exc);
+                    }
+                }
+
+                return base.SerializeToStreamAsync(stream, context);
+            }
+        }
+
         public static IEnumerable<object[]> VerifyUploadServersStreamsAndExpectedData
         {
             get
             {
-                foreach (object[] serverArr in VerifyUploadServers)
+                foreach (object[] serverArr in VerifyUploadServers) // target server
+                foreach (bool syncCopy in new[] { true, false }) // force the content copy to happen via Read/Write or ReadAsync/WriteAsync
                 {
                     Uri server = (Uri)serverArr[0];
 
@@ -694,7 +880,7 @@ namespace System.Net.Http.Functional.Tests
                     // A MemoryStream
                     {
                         var memStream = new MemoryStream(data, writable: false);
-                        yield return new object[] { server, memStream, data };
+                        yield return new object[] { server, new StreamContentWithSyncAsyncCopy(memStream, syncCopy: syncCopy), data };
                     }
 
                     // A stream that provides the data synchronously and has a known length
@@ -706,7 +892,7 @@ namespace System.Net.Http.Functional.Tests
                             lengthFunc: () => wrappedMemStream.Length,
                             positionGetFunc: () => wrappedMemStream.Position,
                             readAsyncFunc: (buffer, offset, count, token) => wrappedMemStream.ReadAsync(buffer, offset, count, token));
-                        yield return new object[] { server, syncKnownLengthStream, data };
+                        yield return new object[] { server, new StreamContentWithSyncAsyncCopy(syncKnownLengthStream, syncCopy: syncCopy), data };
                     }
 
                     // A stream that provides the data synchronously and has an unknown length
@@ -723,7 +909,7 @@ namespace System.Net.Http.Functional.Tests
                                 syncUnknownLengthStreamOffset += bytesToCopy;
                                 return Task.FromResult(bytesToCopy);
                             });
-                        yield return new object[] { server, syncUnknownLengthStream, data };
+                        yield return new object[] { server, new StreamContentWithSyncAsyncCopy(syncUnknownLengthStream, syncCopy: syncCopy), data };
                     }
 
                     // A stream that provides the data asynchronously
@@ -741,7 +927,7 @@ namespace System.Net.Http.Functional.Tests
                                 asyncStreamOffset += bytesToCopy;
                                 return bytesToCopy;
                             });
-                        yield return new object[] { server, asyncStream, data };
+                        yield return new object[] { server, new StreamContentWithSyncAsyncCopy(asyncStream, syncCopy: syncCopy), data };
                     }
                 }
             }
@@ -796,8 +982,9 @@ namespace System.Net.Http.Functional.Tests
             const string ContentString = "This is the content string.";
             var content = new StringContent(ContentString);
             Uri redirectUri = HttpTestServers.RedirectUriForDestinationUri(
-                secure, 
-                secure ? HttpTestServers.SecureRemoteEchoServer : HttpTestServers.RemoteEchoServer, 
+                secure,
+                302,
+                secure ? HttpTestServers.SecureRemoteEchoServer : HttpTestServers.RemoteEchoServer,
                 1);
 
             using (var client = new HttpClient())
@@ -884,7 +1071,9 @@ namespace System.Net.Http.Functional.Tests
                     Assert.Equal(HttpStatusCode.OK, response.StatusCode);
                     TestHelper.VerifyRequestMethod(response, method);
                     string responseContent = await response.Content.ReadAsStringAsync();
-                    _output.WriteLine(responseContent);                    
+                    _output.WriteLine(responseContent);
+
+                    Assert.Contains($"\"Content-Length\": \"{request.Content.Headers.ContentLength.Value}\"", responseContent);
                     TestHelper.VerifyResponseBody(
                         responseContent,
                         response.Content.Headers.ContentMD5,
@@ -896,31 +1085,27 @@ namespace System.Net.Http.Functional.Tests
         #endregion
 
         #region Version tests
-        // The HTTP RFC 7230 states that servers are NOT required to respond back with the same
-        // minor version if they support a higher minor version. In fact, the RFC states that
-        // servers SHOULD send back the highest minor version they support. So, testing the
-        // response version to see if the client sent a particular request version only works
-        // for some servers. In particular the 'Http2Servers' used in these tests always seem
-        // to echo the minor version of the request.
-        [Theory, MemberData(nameof(Http2Servers))]
-        public async Task SendAsync_RequestVersion10_ServerReceivesVersion10Request(Uri server)
+        [Fact]
+        public async Task SendAsync_RequestVersion10_ServerReceivesVersion10Request()
         {
-            Version responseVersion = await SendRequestAndGetResponseVersionAsync(new Version(1, 0), server);
-            Assert.Equal(new Version(1, 0), responseVersion);
+            Version receivedRequestVersion = await SendRequestAndGetRequestVersionAsync(new Version(1, 0));
+            Assert.Equal(new Version(1, 0), receivedRequestVersion);
         }
 
-        [Theory, MemberData(nameof(Http2Servers))]
-        public async Task SendAsync_RequestVersion11_ServerReceivesVersion11Request(Uri server)
+        [Fact]
+        public async Task SendAsync_RequestVersion11_ServerReceivesVersion11Request()
         {
-            Version responseVersion = await SendRequestAndGetResponseVersionAsync(new Version(1, 1), server);
-            Assert.Equal(new Version(1, 1), responseVersion);
+            Version receivedRequestVersion = await SendRequestAndGetRequestVersionAsync(new Version(1, 1));
+            Assert.Equal(new Version(1, 1), receivedRequestVersion);
         }
 
-        [Theory, MemberData(nameof(Http2Servers))]
-        public async Task SendAsync_RequestVersionNotSpecified_ServerReceivesVersion11Request(Uri server)
+        [Fact]
+        public async Task SendAsync_RequestVersionNotSpecified_ServerReceivesVersion11Request()
         {
-            Version responseVersion = await SendRequestAndGetResponseVersionAsync(null, server);
-            Assert.Equal(new Version(1, 1), responseVersion);
+            // The default value for HttpRequestMessage.Version is Version(1,1).
+            // So, we need to set something different (0,0), to test the "unknown" version.
+            Version receivedRequestVersion = await SendRequestAndGetRequestVersionAsync(new Version(0,0));
+            Assert.Equal(new Version(1, 1), receivedRequestVersion);
         }
 
         [Theory, MemberData(nameof(Http2Servers))]
@@ -928,33 +1113,67 @@ namespace System.Net.Http.Functional.Tests
         {
             // We don't currently have a good way to test whether HTTP/2 is supported without
             // using the same mechanism we're trying to test, so for now we allow both 2.0 and 1.1 responses.
-            Version responseVersion = await SendRequestAndGetResponseVersionAsync(new Version(2, 0), server);
-            Assert.True(
-                responseVersion == new Version(2, 0) || 
-                responseVersion == new Version(1, 1),
-                "Response version " + responseVersion);
-        }
-
-        private async Task<Version> SendRequestAndGetResponseVersionAsync(Version requestVersion, Uri server)
-        {
             var request = new HttpRequestMessage(HttpMethod.Get, server);
-            if (requestVersion != null)
-            {
-                request.Version = requestVersion;
-            }
-            else
-            {
-                // The default value for HttpRequestMessage.Version is Version(1,1).
-                // So, we need to set something different to test the "unknown" version.
-                request.Version = new Version(0,0);
-            }
+            request.Version = new Version(2, 0);
 
             using (var client = new HttpClient())
             using (HttpResponseMessage response = await client.SendAsync(request))
             {
                 Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-                return response.Version;
+                Assert.True(
+                    response.Version == new Version(2, 0) || 
+                    response.Version == new Version(1, 1),
+                    "Response version " + response.Version);
             }
+        }
+
+        private async Task<Version> SendRequestAndGetRequestVersionAsync(Version requestVersion)
+        {
+            Version receivedRequestVersion = null;
+
+            await LoopbackServer.CreateServerAsync(async (server, url) =>
+            {
+                var request = new HttpRequestMessage(HttpMethod.Get, url);
+                request.Version = requestVersion;
+
+                using (var client = new HttpClient())
+                {
+                    Task<HttpResponseMessage> getResponse = client.SendAsync(request);
+
+                    await LoopbackServer.AcceptSocketAsync(server, async (s, stream, reader, writer) =>
+                    {
+                        string statusLine = reader.ReadLine();
+                        while (!string.IsNullOrEmpty(reader.ReadLine())) ;
+
+                        if (statusLine.Contains("/1.0"))
+                        {
+                            receivedRequestVersion = new Version(1, 0);
+                        }
+                        else if (statusLine.Contains("/1.1"))
+                        {
+                            receivedRequestVersion = new Version(1, 1);
+                        }
+                        else
+                        {
+                            Assert.True(false, "Invalid HTTP request version");
+                        }
+
+                        await writer.WriteAsync(
+                            $"HTTP/1.1 200 OK\r\n" +
+                            $"Date: {DateTimeOffset.UtcNow:R}\r\n" +
+                            "Content-Length: 0\r\n" +
+                            "\r\n");
+                        s.Shutdown(SocketShutdown.Send);
+                    });
+
+                    using (HttpResponseMessage response = await getResponse)
+                    {
+                        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+                    }
+                }
+            });
+            
+            return receivedRequestVersion;
         }
         #endregion
 

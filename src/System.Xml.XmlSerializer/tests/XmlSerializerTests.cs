@@ -1509,6 +1509,9 @@ string.Format(@"<?xml version=""1.0"" encoding=""utf-8""?>
         Assert.Equal(0, serializers.Length);
     }
 
+#if NET_NATIVE
+    [ActiveIssue(7991)]
+#endif
     [Fact]
     public static void Xml_ConstructorWithXmlRootAttr()
     {
@@ -1524,6 +1527,9 @@ string.Format(@"<?xml version=""1.0"" encoding=""utf-8""?>
         Assert.True(expected.SequenceEqual(actual));
     }
 
+#if NET_NATIVE
+    [ActiveIssue(7991)]
+#endif
     [Fact]
     public static void Xml_ConstructorWithXmlAttributeOverrides()
     {
@@ -1673,6 +1679,114 @@ string.Format(@"<?xml version=""1.0"" encoding=""utf-8""?>
                 var deserializedObj = (TypeWithByteProperty)serializer.Deserialize(stream);
             });
         }
+    }
+
+    [Fact]
+    public static void Xml_XmlAttributes_RemoveXmlElementAttribute()
+    {
+        XmlAttributes attrs = new XmlAttributes();
+
+        XmlElementAttribute item = new XmlElementAttribute("elem1");
+        attrs.XmlElements.Add(item);
+        Assert.True(attrs.XmlElements.Contains(item));
+
+        attrs.XmlElements.Remove(item);
+        Assert.False(attrs.XmlElements.Contains(item));
+    }
+
+    [Fact]
+    public static void Xml_XmlAttributes_RemoveXmlElementAttribute_ThrowsOnMissingItem()
+    {
+        XmlAttributes attrs = new XmlAttributes();
+
+        XmlElementAttribute item1 = new XmlElementAttribute("elem1");
+        attrs.XmlElements.Add(item1);
+
+        XmlElementAttribute item2 = new XmlElementAttribute("elem2");
+        attrs.XmlElements.Add(item2);
+        Assert.True(attrs.XmlElements.Contains(item1));
+        Assert.True(attrs.XmlElements.Contains(item2));
+
+        attrs.XmlElements.Remove(item2);
+        Assert.False(attrs.XmlElements.Contains(item2));
+
+        Assert.Throws<ArgumentException>(() => { attrs.XmlElements.Remove(item2); });
+    }
+
+    [Fact]
+    public static void Xml_XmlAttributes_RemoveXmlArrayItemAttribute()
+    {
+        XmlAttributes attrs = new XmlAttributes();
+
+        XmlArrayItemAttribute item = new XmlArrayItemAttribute("item1");
+        attrs.XmlArrayItems.Add(item);
+        Assert.True(attrs.XmlArrayItems.Contains(item));
+
+        attrs.XmlArrayItems.Remove(item);
+        Assert.False(attrs.XmlArrayItems.Contains(item));
+    }
+
+    [Fact]
+    public static void Xml_XmlAttributes_RemoveXmlArrayItemAttribute_ThrowsOnMissingItem()
+    {
+        XmlAttributes attrs = new XmlAttributes();
+
+        XmlArrayItemAttribute item1 = new XmlArrayItemAttribute("item1");
+        attrs.XmlArrayItems.Add(item1);
+
+        XmlArrayItemAttribute item2 = new XmlArrayItemAttribute("item2");
+        attrs.XmlArrayItems.Add(item2);
+        Assert.True(attrs.XmlArrayItems.Contains(item1));
+        Assert.True(attrs.XmlArrayItems.Contains(item2));
+
+        attrs.XmlArrayItems.Remove(item2);
+        Assert.False(attrs.XmlArrayItems.Contains(item2));
+
+        Assert.Throws<ArgumentException>(() => { attrs.XmlArrayItems.Remove(item2); });
+    }
+
+    [Fact]
+    public static void Xml_XmlAttributes_RemoveXmlAnyElementAttribute()
+    {
+        XmlAttributes attrs = new XmlAttributes();
+
+        XmlAnyElementAttribute item = new XmlAnyElementAttribute("elem1");
+        attrs.XmlAnyElements.Add(item);
+        Assert.True(attrs.XmlAnyElements.Contains(item));
+
+        attrs.XmlAnyElements.Remove(item);
+        Assert.False(attrs.XmlAnyElements.Contains(item));
+    }
+
+    [Fact]
+    public static void Xml_XmlAttributes_RemoveXmlAnyElementAttributeThrowsOnMissingItem()
+    {
+        XmlAttributes attrs = new XmlAttributes();
+
+        XmlAnyElementAttribute item1 = new XmlAnyElementAttribute("elem1");
+        attrs.XmlAnyElements.Add(item1);
+
+        XmlAnyElementAttribute item2 = new XmlAnyElementAttribute("elem2");
+        attrs.XmlAnyElements.Add(item2);
+        Assert.True(attrs.XmlAnyElements.Contains(item1));
+        Assert.True(attrs.XmlAnyElements.Contains(item2));
+
+        attrs.XmlAnyElements.Remove(item2);
+        Assert.False(attrs.XmlAnyElements.Contains(item2));
+
+        Assert.Throws<ArgumentException>(() => { attrs.XmlAnyElements.Remove(item2); });
+    }
+
+    [Fact]
+    public static void Xml_ArrayOfXmlNodeProperty()
+    {
+        var obj = new TypeWithXmlNodeArrayProperty()
+        {
+            CDATA = new[] { new XmlDocument().CreateCDataSection("test&test") }
+        };
+        var deserializedObj = SerializeAndDeserialize<TypeWithXmlNodeArrayProperty>(obj, @"<TypeWithXmlNodeArrayProperty xmlns:xsi=""http://www.w3.org/2001/XMLSchema-instance"" xmlns:xsd=""http://www.w3.org/2001/XMLSchema""><![CDATA[test&test]]></TypeWithXmlNodeArrayProperty>");
+        Assert.Equal(obj.CDATA.Length, deserializedObj.CDATA.Length);
+        Assert.Equal(obj.CDATA[0].InnerText, deserializedObj.CDATA[0].InnerText);
     }
 
     private static T SerializeAndDeserialize<T>(T value, string baseline, Func<XmlSerializer> serializerFactory = null,

@@ -38,11 +38,6 @@ namespace System.Linq.Expressions.Interpreter
             Labels = labels;
         }
 
-        internal int Length
-        {
-            get { return Instructions.Length; }
-        }
-
         #region Debug View
 
         internal sealed class DebugView
@@ -628,14 +623,14 @@ namespace System.Linq.Expressions.Interpreter
             }
         }
 
-        internal void EmitInitializeParameter(int index, Type parameterType)
+        internal void EmitInitializeParameter(int index)
         {
-            Emit(Parameter(index, parameterType));
+            Emit(Parameter(index));
         }
 
-        internal static Instruction Parameter(int index, Type parameterType)
+        internal static Instruction Parameter(int index)
         {
-            return new InitializeLocalInstruction.Parameter(index, parameterType);
+            return new InitializeLocalInstruction.Parameter(index);
         }
 
         internal static Instruction ParameterBox(int index)
@@ -1107,6 +1102,13 @@ namespace System.Linq.Expressions.Interpreter
             Emit(EnterTryCatchFinallyInstruction.CreateTryCatch());
         }
 
+        public EnterTryFaultInstruction EmitEnterTryFault(BranchLabel tryEnd)
+        {
+            var instruction = new EnterTryFaultInstruction(EnsureLabelIndex(tryEnd));
+            Emit(instruction);
+            return instruction;
+        }
+
         public void EmitEnterFinally(BranchLabel finallyStartLabel)
         {
             Emit(EnterFinallyInstruction.Create(EnsureLabelIndex(finallyStartLabel)));
@@ -1117,9 +1119,14 @@ namespace System.Linq.Expressions.Interpreter
             Emit(LeaveFinallyInstruction.Instance);
         }
 
-        public void EmitLeaveFault(bool hasValue)
+        public void EmitEnterFault(BranchLabel faultStartLabel)
         {
-            Emit(hasValue ? LeaveFaultInstruction.NonVoid : LeaveFaultInstruction.Void);
+            Emit(EnterFaultInstruction.Create(EnsureLabelIndex(faultStartLabel)));
+        }
+
+        public void EmitLeaveFault()
+        {
+            Emit(LeaveFaultInstruction.Instance);
         }
 
         public void EmitEnterExceptionFilter()

@@ -437,6 +437,14 @@ check_cxx_source_compiles(
     "
     HAVE_CURL_SSLVERSION_TLSv1_012)
 
+option(HeimdalGssApi "use heimdal implementation of GssApi" OFF)
+
+if (HeimdalGssApi)
+   check_include_files(
+       gssapi/gssapi.h
+       HAVE_HEIMDAL_HEADERS)
+endif()
+
 check_include_files(
     GSS/GSS.h
     HAVE_GSSFW_HEADERS)
@@ -451,6 +459,18 @@ else ()
         GSS_SPNEGO_MECHANISM
         "gssapi/gssapi.h"
         HAVE_GSS_SPNEGO_MECHANISM)
+endif ()
+
+if (HAVE_GSSFW_HEADERS)
+    check_symbol_exists(
+        GSS_KRB5_CRED_NO_CI_FLAGS_X
+        "GSS/GSS.h"
+        HAVE_GSS_KRB5_CRED_NO_CI_FLAGS_X)
+else ()
+    check_symbol_exists(
+        GSS_KRB5_CRED_NO_CI_FLAGS_X
+        "gssapi/gssapi_krb5.h"
+        HAVE_GSS_KRB5_CRED_NO_CI_FLAGS_X)
 endif ()
 
 set (CMAKE_REQUIRED_LIBRARIES)

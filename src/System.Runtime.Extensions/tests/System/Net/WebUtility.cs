@@ -13,14 +13,43 @@ namespace System.Net.Tests
     public class WebUtilityTests
     {
         // HtmlEncode + HtmlDecode
-
         public static IEnumerable<object[]> HtmlDecode_TestData()
         {
+            // Needs decoding
             yield return new object[] { "Hello! &apos;&quot;&lt;&amp;&gt;\u2665&hearts;\u00E7&#xe7;&#231;", "Hello! '\"<&>\u2665\u2665\u00E7\u00E7\u00E7" };
-            yield return new object[] { "Hello, world! \"<>\u2665\u00E7", "Hello, world! \"<>\u2665\u00E7" }; // No special chars
-            yield return new object[] { null, null };
+            yield return new object[] { "&#xD7FF;&#xd7ff;", "\uD7FF\uD7FF" };
+            yield return new object[] { "&#xE000;&#xe000;", "\uE000\uE000" };
+            yield return new object[] { "&#97;&#98;&#99;", "abc" };
 
+            // Surrogate pairs
+            yield return new object[] { "&#65536;", "\uD800\uDC00" };
+            yield return new object[] { "a&#65536;b", "a\uD800\uDC00b" };
             yield return new object[] { "&#144308;", char.ConvertFromUtf32(144308) };
+
+            // Invalid encoding
+            yield return new object[] { "&", "&" };
+            yield return new object[] { "&#", "&#" };
+            yield return new object[] { "&#x", "&#x" };
+            yield return new object[] { "&abc", "&abc" };
+            yield return new object[] { "&abc;", "&abc;" };
+            yield return new object[] { "&#65536", "&#65536" };
+            yield return new object[] { "&#xD7FF", "&#xD7FF" };
+            yield return new object[] { "&#xG123;", "&#xG123;" };
+            yield return new object[] { "&#xD800;", "&#xD800;" };
+            yield return new object[] { "&#xDFFF;", "&#xDFFF;" };
+            yield return new object[] { "&#1114112;", "&#1114112;" };
+            yield return new object[] { "&#x110000;", "&#x110000;" };
+            yield return new object[] { "&#4294967296;", "&#4294967296;" };
+            yield return new object[] { "&#x100000000;", "&#x100000000;" };
+
+            // Basic
+            yield return new object[] { "Hello, world!", "Hello, world!" };
+            yield return new object[] { "Hello, world! \"<>\u2665\u00E7", "Hello, world! \"<>\u2665\u00E7" };
+            yield return new object[] { "    ", "    " };
+
+            // Empty
+            yield return new object[] { "", "" };
+            yield return new object[] { null, null };
         }
 
         [Theory]
@@ -30,17 +59,41 @@ namespace System.Net.Tests
             Assert.Equal(expected, WebUtility.HtmlDecode(value));
         }
 
+        [Fact]
+        public static void HtmlDecode_InvalidUnicode()
+        {
+            // TODO: add into HtmlDecode_TestData when #7166 is fixed
+            // High BMP non-chars
+            HtmlDecode("\uFFFD", "\uFFFD");
+            HtmlDecode("\uFFFE", "\uFFFE");
+            HtmlDecode("\uFFFF", "\uFFFF");
+        }
+
         public static IEnumerable<object[]> HtmlEncode_TestData()
         {
             // Single quotes need to be encoded as &#39; rather than &apos; since &#39; is valid both for
             // HTML and XHTML, but &apos; is valid only for XHTML.
             // For more info: http://fishbowl.pastiche.org/2003/07/01/the_curse_of_apos/
             yield return new object[] { "'", "&#39;" };
-            yield return new object[] { "Hello! '\"<&>\u2665\u00E7 World", "Hello! &#39;&quot;&lt;&amp;&gt;\u2665&#231; World" };
-            yield return new object[] { null, null };
-            yield return new object[] { "Hello, world!", "Hello, world!" }; // No special chars
 
-            yield return new object[] { char.ConvertFromUtf32(144308), "&#144308;" }; // Default strict settings
+            yield return new object[] { "Hello! '\"<&>\u2665\u00E7 World", "Hello! &#39;&quot;&lt;&amp;&gt;\u2665&#231; World" };
+            yield return new object[] { "<>\"\\&", "&lt;&gt;&quot;\\&amp;" };
+            yield return new object[] { "\u00A0", "&#160;" };
+            yield return new object[] { "\u00FF", "&#255;" };
+            yield return new object[] { "\u0100", "\u0100" };
+
+            // Surrogate pairs - default strict settings
+            yield return new object[] { char.ConvertFromUtf32(144308), "&#144308;" };
+            yield return new object[] { "\uD800\uDC00", "&#65536;" };
+            yield return new object[] { "a\uD800\uDC00b", "a&#65536;b" };
+
+            // Basic
+            yield return new object[] { "Hello, world!", "Hello, world!" };
+            yield return new object[] { "    ", "    " };
+
+            // Empty string
+            yield return new object[] { "", "" };
+            yield return new object[] { null, null };
         }
 
         [Theory]
@@ -50,14 +103,62 @@ namespace System.Net.Tests
             Assert.Equal(expected, WebUtility.HtmlEncode(value));
         }
 
+        [Fact]
+        public static void HtmlEncode_InvalidUnicode()
+        {
+            // TODO: add into HtmlEncode_TestData when #7166 is fixed
+            // High BMP non-chars
+            HtmlEncode("\uFFFD", "\uFFFD");
+            HtmlEncode("\uFFFE", "\uFFFE");
+            HtmlEncode("\uFFFF", "\uFFFF");
+            
+            // Lone high surrogate
+            HtmlEncode("\uD800", "\uFFFD");
+            HtmlEncode("\uD800a", "\uFFFDa");
+
+            // Lone low surrogate
+            HtmlEncode("\uDC00", "\uFFFD");
+            HtmlEncode("\uDC00a", "\uFFFDa");
+
+            // Invalid surrogate pairs
+            HtmlEncode("\uD800\uD800", "\uFFFD\uFFFD"); // High, high
+            HtmlEncode("\uDC00\uD800", "\uFFFD\uFFFD"); // Low, high
+            HtmlEncode("\uDC00\uDC00", "\uFFFD\uFFFD"); // Low, low
+        }
+
         // Shared test data for UrlEncode + Decode and their ToBytes counterparts
 
         public static IEnumerable<Tuple<string, string>> UrlDecode_SharedTestData()
         {
-            // Recent change brings function inline with RFC 3986 to return hex-encoded chars in uppercase
+            // Escaping needed - case insensitive hex
             yield return Tuple.Create("%2F%5C%22%09Hello!+%E2%99%A5%3F%2F%5C%22%09World!+%E2%99%A5%3F%E2%99%A5", "/\\\"\tHello! \u2665?/\\\"\tWorld! \u2665?\u2665");
-            yield return Tuple.Create("Hello, world", "Hello, world"); // No special chars
-            yield return Tuple.Create("%F0%90%8F%BF", "\uD800\uDFFF"); // Surrogate pair
+            yield return Tuple.Create("%2f%5c%22%09Hello!+%e2%99%a5%3f%2f%5c%22%09World!+%e2%99%a5%3F%e2%99%a5", "/\\\"\tHello! \u2665?/\\\"\tWorld! \u2665?\u2665");
+
+            // Unecessary escaping
+            yield return Tuple.Create("%61%62%63", "abc");
+            yield return Tuple.Create("\u1234%61%62%63\u1234", "\u1234abc\u1234");
+
+            // Surrogate pair
+            yield return Tuple.Create("%F0%90%8F%BF", "\uD800\uDFFF");
+            yield return Tuple.Create("\uD800\uDFFF", "\uD800\uDFFF");
+
+            // Spaces
+            yield return Tuple.Create("abc+def", "abc def");
+            yield return Tuple.Create("++++", "    ");
+            yield return Tuple.Create("    ", "    ");
+
+            // No escaping needed
+            yield return Tuple.Create("abc", "abc");
+            yield return Tuple.Create("", "");
+            yield return Tuple.Create("Hello, world", "Hello, world");
+            yield return Tuple.Create("\u1234\u2345", "\u1234\u2345");
+            yield return Tuple.Create("abc\u1234\u2345def\u1234", "abc\u1234\u2345def\u1234");
+
+            // Invalid percent encoding
+            yield return Tuple.Create("%", "%");
+            yield return Tuple.Create("%A", "%A");
+            yield return Tuple.Create("%G1", "%G1");
+            yield return Tuple.Create("%1G", "%1G");
         }
 
         public static IEnumerable<Tuple<string, string>> UrlEncode_SharedTestData()
@@ -66,7 +167,16 @@ namespace System.Net.Tests
             yield return Tuple.Create("/\\\"\tHello! \u2665?/\\\"\tWorld! \u2665?\u2665", "%2F%5C%22%09Hello!+%E2%99%A5%3F%2F%5C%22%09World!+%E2%99%A5%3F%E2%99%A5");
             yield return Tuple.Create("'", "%27");
             yield return Tuple.Create("\uD800\uDFFF", "%F0%90%8F%BF"); // Surrogate pairs should be encoded as 4 bytes together
-            
+
+            // No escaping needed
+            yield return Tuple.Create("abc", "abc");
+            yield return Tuple.Create("", "");
+
+            // Spaces
+            yield return Tuple.Create("abc def", "abc+def");
+            yield return Tuple.Create("    ", "++++");
+            yield return Tuple.Create("++++", "%2B%2B%2B%2B");
+
             // TODO: Uncomment this block out when dotnet/corefx#7166 is fixed.
 
             /*
@@ -217,6 +327,10 @@ namespace System.Net.Tests
                 byte[] output = Encoding.UTF8.GetBytes(tuple.Item2);
                 yield return new object[] { input, 0, input.Length, output };
             }
+            // Mixture of ASCII and non-URL safe chars (full and in a range)
+            yield return new object[] { new byte[] { 97, 225, 136, 180, 98 }, 0, 5, new byte[] { 97, 37, 69, 49, 37, 56, 56, 37, 66, 52, 98 } };
+            yield return new object[] { new byte[] { 97, 225, 136, 180, 98 }, 1, 3, new byte[] { 37, 69, 49, 37, 56, 56, 37, 66, 52 } };
+
             yield return new object[] { null, 0, 0, null };
         }
 

@@ -355,11 +355,7 @@ namespace System.Linq.Expressions
 
         internal static Expression Create(ExpressionType nodeType, Expression left, Expression right, Type type, MethodInfo method, LambdaExpression conversion)
         {
-            if (nodeType == ExpressionType.Assign)
-            {
-                Debug.Assert(method == null && TypeUtils.AreEquivalent(type, left.Type));
-                return new AssignBinaryExpression(left, right);
-            }
+            Debug.Assert(nodeType != ExpressionType.Assign);
             if (conversion != null)
             {
                 Debug.Assert(method == null && TypeUtils.AreEquivalent(type, right.Type) && nodeType == ExpressionType.Coalesce);
@@ -627,8 +623,8 @@ namespace System.Linq.Expressions
         {
             RequiresCanWrite(left, nameof(left));
             RequiresCanRead(right, nameof(right));
-            TypeUtils.ValidateType(left.Type);
-            TypeUtils.ValidateType(right.Type);
+            TypeUtils.ValidateType(left.Type, nameof(left));
+            TypeUtils.ValidateType(right.Type, nameof(right));
             if (!TypeUtils.AreReferenceAssignable(left.Type, right.Type))
             {
                 throw Error.ExpressionTypeDoesNotMatchAssignment(right.Type, left.Type);
@@ -672,7 +668,7 @@ namespace System.Linq.Expressions
         private static BinaryExpression GetMethodBasedBinaryOperator(ExpressionType binaryType, Expression left, Expression right, MethodInfo method, bool liftToNull)
         {
             System.Diagnostics.Debug.Assert(method != null);
-            ValidateOperator(method);
+            ValidateOperator(method, nameof(method));
             ParameterInfo[] pms = method.GetParametersCached();
             if (pms.Length != 2)
                 throw Error.IncorrectNumberOfMethodCallArguments(method);
@@ -803,21 +799,21 @@ namespace System.Linq.Expressions
         }
 
 
-        private static void ValidateOperator(MethodInfo method)
+        private static void ValidateOperator(MethodInfo method, string paramName)
         {
             System.Diagnostics.Debug.Assert(method != null);
-            ValidateMethodInfo(method);
+            ValidateMethodInfo(method, nameof(method));
             if (!method.IsStatic)
-                throw Error.UserDefinedOperatorMustBeStatic(method);
+                throw Error.UserDefinedOperatorMustBeStatic(method, nameof(method));
             if (method.ReturnType == typeof(void))
-                throw Error.UserDefinedOperatorMustNotBeVoid(method);
+                throw Error.UserDefinedOperatorMustNotBeVoid(method, nameof(method));
         }
 
 
-        private static void ValidateMethodInfo(MethodInfo method)
+        private static void ValidateMethodInfo(MethodInfo method, string paramName)
         {
             if (method.ContainsGenericParameters)
-                throw method.IsGenericMethodDefinition ? Error.MethodIsGeneric(method) : Error.MethodContainsGenericParameters(method);
+                throw method.IsGenericMethodDefinition ? Error.MethodIsGeneric(method, paramName) : Error.MethodContainsGenericParameters(method, paramName);
         }
 
 
@@ -853,7 +849,7 @@ namespace System.Linq.Expressions
 
         private static void ValidateUserDefinedConditionalLogicOperator(ExpressionType nodeType, Type left, Type right, MethodInfo method)
         {
-            ValidateOperator(method);
+            ValidateOperator(method, nameof(method));
             ParameterInfo[] pms = method.GetParametersCached();
             if (pms.Length != 2)
                 throw Error.IncorrectNumberOfMethodCallArguments(method);
@@ -1496,7 +1492,7 @@ namespace System.Linq.Expressions
             MethodInfo method = delegateType.GetMethod("Invoke");
             if (method.ReturnType == typeof(void))
             {
-                throw Error.UserDefinedOperatorMustNotBeVoid(conversion);
+                throw Error.UserDefinedOperatorMustNotBeVoid(conversion, nameof(method));
             }
             ParameterInfo[] pms = method.GetParametersCached();
             Debug.Assert(pms.Length == conversion.Parameters.Count);
@@ -2958,13 +2954,13 @@ namespace System.Linq.Expressions
             RequiresCanRead(index, nameof(index));
             if (index.Type != typeof(int))
             {
-                throw Error.ArgumentMustBeArrayIndexType();
+                throw Error.ArgumentMustBeArrayIndexType(nameof(index));
             }
 
             Type arrayType = array.Type;
             if (!arrayType.IsArray)
             {
-                throw Error.ArgumentMustBeArray();
+                throw Error.ArgumentMustBeArray(nameof(array));
             }
             if (arrayType.GetArrayRank() != 1)
             {

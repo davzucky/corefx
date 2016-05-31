@@ -14,7 +14,6 @@
     <IsPartialFacadeAssembly Condition="'$(TargetGroup)' == 'net46'">true</IsPartialFacadeAssembly>
     <ResourcesSourceOutputDirectory Condition="'$(TargetGroup)' == 'net46'">None</ResourcesSourceOutputDirectory>
     <PackageTargetFramework Condition="'$(TargetGroup)' == ''">netstandard1.3</PackageTargetFramework>
-    <UsePackageTargetRuntimeDefaults Condition="'$(TargetGroup)' == ''">true</UsePackageTargetRuntimeDefaults>
     <NuGetTargetMoniker Condition="'$(TargetGroup)' == ''">.NETStandard,Version=v1.3</NuGetTargetMoniker>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(TargetsWindows)' == 'true' AND '$(TargetGroup)' == ''">
@@ -227,9 +226,6 @@
     </Compile>
     <Compile Include="$(CommonPath)\Interop\Unix\System.Native\Interop.Stat.Pipe.cs">
       <Link>Common\Interop\Unix\Interop.Stat.Pipe.cs</Link>
-    </Compile>
-    <Compile Include="$(CommonPath)\System\IO\PersistedFiles.Names.Unix.cs">
-      <Link>Common\System\IO\PersistedFiles.Names.Unix.cs</Link>
     </Compile>
     <Compile Include="$(CommonPath)\System\Threading\Tasks\ForceAsyncAwaiter.cs">
       <Link>Common\System\Threading\Tasks\ForceAsyncAwaiter.cs</Link>

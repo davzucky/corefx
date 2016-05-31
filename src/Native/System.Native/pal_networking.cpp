@@ -1251,7 +1251,7 @@ static int32_t GetIPv4PacketInformation(cmsghdr* controlMessage, IPPacketInforma
 #if HAVE_IN_PKTINFO
     packetInfo->InterfaceIndex = static_cast<int32_t>(pktinfo->ipi_ifindex);
 #else
-    // TODO: Figure out how to get interface index with in_addr.
+    // TODO (#7855): Figure out how to get interface index with in_addr.
     // One option is http://www.unix.com/man-page/freebsd/3/if_nametoindex
     // which requires interface name to be known.
     // Meanwhile:
@@ -1355,12 +1355,7 @@ static bool GetMulticastOptionName(int32_t multicastOption, bool isIPv6, int& op
     }
 }
 
-extern "C" Error SystemNative_GetIPv4MulticastOption(int32_t socket, int32_t multicastOption, IPv4MulticastOption* option)
-{
-    return SystemNative_GetIPv4MulticastOption_IntPtr(socket, multicastOption, option);
-}
-
-extern "C" Error SystemNative_GetIPv4MulticastOption_IntPtr(intptr_t socket, int32_t multicastOption, IPv4MulticastOption* option)
+extern "C" Error SystemNative_GetIPv4MulticastOption(intptr_t socket, int32_t multicastOption, IPv4MulticastOption* option)
 {
     if (option == nullptr)
     {
@@ -1398,12 +1393,7 @@ extern "C" Error SystemNative_GetIPv4MulticastOption_IntPtr(intptr_t socket, int
     return PAL_SUCCESS;
 }
 
-extern "C" Error SystemNative_SetIPv4MulticastOption(int32_t socket, int32_t multicastOption, IPv4MulticastOption* option)
-{
-    return SystemNative_SetIPv4MulticastOption_IntPtr(socket, multicastOption, option);
-}
-
-extern "C" Error SystemNative_SetIPv4MulticastOption_IntPtr(intptr_t socket, int32_t multicastOption, IPv4MulticastOption* option)
+extern "C" Error SystemNative_SetIPv4MulticastOption(intptr_t socket, int32_t multicastOption, IPv4MulticastOption* option)
 {
     if (option == nullptr)
     {
@@ -1434,12 +1424,7 @@ extern "C" Error SystemNative_SetIPv4MulticastOption_IntPtr(intptr_t socket, int
     return err == 0 ? PAL_SUCCESS : SystemNative_ConvertErrorPlatformToPal(errno);
 }
 
-extern "C" Error SystemNative_GetIPv6MulticastOption(int32_t socket, int32_t multicastOption, IPv6MulticastOption* option)
-{
-    return SystemNative_GetIPv6MulticastOption_IntPtr(socket, multicastOption, option);
-}
-
-extern "C" Error SystemNative_GetIPv6MulticastOption_IntPtr(intptr_t socket, int32_t multicastOption, IPv6MulticastOption* option)
+extern "C" Error SystemNative_GetIPv6MulticastOption(intptr_t socket, int32_t multicastOption, IPv6MulticastOption* option)
 {
     if (option == nullptr)
     {
@@ -1467,12 +1452,7 @@ extern "C" Error SystemNative_GetIPv6MulticastOption_IntPtr(intptr_t socket, int
     return PAL_SUCCESS;
 }
 
-extern "C" Error SystemNative_SetIPv6MulticastOption(int32_t socket, int32_t multicastOption, IPv6MulticastOption* option)
-{
-    return SystemNative_SetIPv6MulticastOption_IntPtr(socket, multicastOption, option);
-}
-
-extern "C" Error SystemNative_SetIPv6MulticastOption_IntPtr(intptr_t socket, int32_t multicastOption, IPv6MulticastOption* option)
+extern "C" Error SystemNative_SetIPv6MulticastOption(intptr_t socket, int32_t multicastOption, IPv6MulticastOption* option)
 {
     if (option == nullptr)
     {
@@ -1531,12 +1511,7 @@ constexpr int32_t GetMaxLingerTime()
 }
 #endif
 
-extern "C" Error SystemNative_GetLingerOption(int32_t socket, LingerOption* option)
-{
-    return SystemNative_GetLingerOption_IntPtr(socket, option);
-}
-
-extern "C" Error SystemNative_GetLingerOption_IntPtr(intptr_t socket, LingerOption* option)
+extern "C" Error SystemNative_GetLingerOption(intptr_t socket, LingerOption* option)
 {
     if (option == nullptr)
     {
@@ -1557,12 +1532,7 @@ extern "C" Error SystemNative_GetLingerOption_IntPtr(intptr_t socket, LingerOpti
     return PAL_SUCCESS;
 }
 
-extern "C" Error SystemNative_SetLingerOption(int32_t socket, LingerOption* option)
-{
-    return SystemNative_SetLingerOption_IntPtr(socket, option);
-}
-
-extern "C" Error SystemNative_SetLingerOption_IntPtr(intptr_t socket, LingerOption* option)
+extern "C" Error SystemNative_SetLingerOption(intptr_t socket, LingerOption* option)
 {
     if (option == nullptr)
     {
@@ -1609,22 +1579,12 @@ Error SetTimeoutOption(int32_t socket, int32_t millisecondsTimeout, int optionNa
     return err == 0 ? PAL_SUCCESS : SystemNative_ConvertErrorPlatformToPal(errno);
 }
 
-extern "C" Error SystemNative_SetReceiveTimeout(int32_t socket, int32_t millisecondsTimeout)
-{
-    return SystemNative_SetReceiveTimeout_IntPtr(socket, millisecondsTimeout);
-}
-
-extern "C" Error SystemNative_SetReceiveTimeout_IntPtr(intptr_t socket, int32_t millisecondsTimeout)
+extern "C" Error SystemNative_SetReceiveTimeout(intptr_t socket, int32_t millisecondsTimeout)
 {
     return SetTimeoutOption(ToFileDescriptor(socket), millisecondsTimeout, SO_RCVTIMEO);
 }
 
-extern "C" Error SystemNative_SetSendTimeout(int32_t socket, int32_t millisecondsTimeout)
-{
-    return SystemNative_SetSendTimeout_IntPtr(socket, millisecondsTimeout);
-}
-
-extern "C" Error SystemNative_SetSendTimeout_IntPtr(intptr_t socket, int32_t millisecondsTimeout)
+extern "C" Error SystemNative_SetSendTimeout(intptr_t socket, int32_t millisecondsTimeout)
 {
     return SetTimeoutOption(ToFileDescriptor(socket), millisecondsTimeout, SO_SNDTIMEO);
 }
@@ -1635,7 +1595,6 @@ static bool ConvertSocketFlagsPalToPlatform(int32_t palFlags, int& platformFlags
 
     if ((palFlags & ~SupportedFlagsMask) != 0)
     {
-        // TODO: we may want to simply mask off unsupported flags.
         return false;
     }
 
@@ -1659,12 +1618,7 @@ static int32_t ConvertSocketFlagsPlatformToPal(int platformFlags)
            ((platformFlags & MSG_CTRUNC) == 0 ? 0 : PAL_MSG_CTRUNC);
 }
 
-extern "C" Error SystemNative_ReceiveMessage(int32_t socket, MessageHeader* messageHeader, int32_t flags, int64_t* received)
-{
-    return SystemNative_ReceiveMessage_IntPtr(socket, messageHeader, flags, received);
-}
-
-extern "C" Error SystemNative_ReceiveMessage_IntPtr(intptr_t socket, MessageHeader* messageHeader, int32_t flags, int64_t* received)
+extern "C" Error SystemNative_ReceiveMessage(intptr_t socket, MessageHeader* messageHeader, int32_t flags, int64_t* received)
 {
     if (messageHeader == nullptr || received == nullptr || messageHeader->SocketAddressLen < 0 ||
         messageHeader->ControlBufferLen < 0 || messageHeader->IOVectorCount < 0)
@@ -1706,12 +1660,7 @@ extern "C" Error SystemNative_ReceiveMessage_IntPtr(intptr_t socket, MessageHead
     return SystemNative_ConvertErrorPlatformToPal(errno);
 }
 
-extern "C" Error SystemNative_SendMessage(int32_t socket, MessageHeader* messageHeader, int32_t flags, int64_t* sent)
-{
-    return SystemNative_SendMessage_IntPtr(socket, messageHeader, flags, sent);
-}
-
-extern "C" Error SystemNative_SendMessage_IntPtr(intptr_t socket, MessageHeader* messageHeader, int32_t flags, int64_t* sent)
+extern "C" Error SystemNative_SendMessage(intptr_t socket, MessageHeader* messageHeader, int32_t flags, int64_t* sent)
 {
     if (messageHeader == nullptr || sent == nullptr || messageHeader->SocketAddressLen < 0 ||
         messageHeader->ControlBufferLen < 0 || messageHeader->IOVectorCount < 0)
@@ -1742,15 +1691,7 @@ extern "C" Error SystemNative_SendMessage_IntPtr(intptr_t socket, MessageHeader*
     return SystemNative_ConvertErrorPlatformToPal(errno);
 }
 
-extern "C" Error SystemNative_Accept(int32_t socket, uint8_t* socketAddress, int32_t* socketAddressLen, int32_t* acceptedSocket)
-{
-    intptr_t accepted;
-    Error err = SystemNative_Accept_IntPtr(socket, socketAddress, socketAddressLen, &accepted);
-    *acceptedSocket = ToFileDescriptorUnchecked(accepted);
-    return err;
-}
-
-extern "C" Error SystemNative_Accept_IntPtr(intptr_t socket, uint8_t* socketAddress, int32_t* socketAddressLen, intptr_t* acceptedSocket)
+extern "C" Error SystemNative_Accept(intptr_t socket, uint8_t* socketAddress, int32_t* socketAddressLen, intptr_t* acceptedSocket)
 {
     if (socketAddress == nullptr || socketAddressLen == nullptr || acceptedSocket == nullptr || *socketAddressLen < 0)
     {
@@ -1774,12 +1715,7 @@ extern "C" Error SystemNative_Accept_IntPtr(intptr_t socket, uint8_t* socketAddr
     return PAL_SUCCESS;
 }
 
-extern "C" Error SystemNative_Bind(int32_t socket, uint8_t* socketAddress, int32_t socketAddressLen)
-{
-    return SystemNative_Bind_IntPtr(socket, socketAddress, socketAddressLen);
-}
-
-extern "C" Error SystemNative_Bind_IntPtr(intptr_t socket, uint8_t* socketAddress, int32_t socketAddressLen)
+extern "C" Error SystemNative_Bind(intptr_t socket, uint8_t* socketAddress, int32_t socketAddressLen)
 {
     if (socketAddress == nullptr || socketAddressLen < 0)
     {
@@ -1792,12 +1728,7 @@ extern "C" Error SystemNative_Bind_IntPtr(intptr_t socket, uint8_t* socketAddres
     return err == 0 ? PAL_SUCCESS : SystemNative_ConvertErrorPlatformToPal(errno);
 }
 
-extern "C" Error SystemNative_Connect(int32_t socket, uint8_t* socketAddress, int32_t socketAddressLen)
-{
-    return SystemNative_Connect_IntPtr(socket, socketAddress, socketAddressLen);
-}
-
-extern "C" Error SystemNative_Connect_IntPtr(intptr_t socket, uint8_t* socketAddress, int32_t socketAddressLen)
+extern "C" Error SystemNative_Connect(intptr_t socket, uint8_t* socketAddress, int32_t socketAddressLen)
 {
     if (socketAddress == nullptr || socketAddressLen < 0)
     {
@@ -1811,12 +1742,7 @@ extern "C" Error SystemNative_Connect_IntPtr(intptr_t socket, uint8_t* socketAdd
     return err == 0 ? PAL_SUCCESS : SystemNative_ConvertErrorPlatformToPal(errno);
 }
 
-extern "C" Error SystemNative_GetPeerName(int32_t socket, uint8_t* socketAddress, int32_t* socketAddressLen)
-{
-    return SystemNative_GetPeerName_IntPtr(socket, socketAddress, socketAddressLen);
-}
-
-extern "C" Error SystemNative_GetPeerName_IntPtr(intptr_t socket, uint8_t* socketAddress, int32_t* socketAddressLen)
+extern "C" Error SystemNative_GetPeerName(intptr_t socket, uint8_t* socketAddress, int32_t* socketAddressLen)
 {
     if (socketAddress == nullptr || socketAddressLen == nullptr || *socketAddressLen < 0)
     {
@@ -1837,12 +1763,7 @@ extern "C" Error SystemNative_GetPeerName_IntPtr(intptr_t socket, uint8_t* socke
     return PAL_SUCCESS;
 }
 
-extern "C" Error SystemNative_GetSockName(int32_t socket, uint8_t* socketAddress, int32_t* socketAddressLen)
-{
-    return SystemNative_GetSockName_IntPtr(socket, socketAddress, socketAddressLen);
-}
-
-extern "C" Error SystemNative_GetSockName_IntPtr(intptr_t socket, uint8_t* socketAddress, int32_t* socketAddressLen)
+extern "C" Error SystemNative_GetSockName(intptr_t socket, uint8_t* socketAddress, int32_t* socketAddressLen)
 {
     if (socketAddress == nullptr || socketAddressLen == nullptr || *socketAddressLen < 0)
     {
@@ -1863,24 +1784,14 @@ extern "C" Error SystemNative_GetSockName_IntPtr(intptr_t socket, uint8_t* socke
     return PAL_SUCCESS;
 }
 
-extern "C" Error SystemNative_Listen(int32_t socket, int32_t backlog)
-{
-    return SystemNative_Listen_IntPtr(socket, backlog);
-}
-
-extern "C" Error SystemNative_Listen_IntPtr(intptr_t socket, int32_t backlog)
+extern "C" Error SystemNative_Listen(intptr_t socket, int32_t backlog)
 {
     int fd = ToFileDescriptor(socket);
     int err = listen(fd, backlog);
     return err == 0 ? PAL_SUCCESS : SystemNative_ConvertErrorPlatformToPal(errno);
 }
 
-extern "C" Error SystemNative_Shutdown(int32_t socket, int32_t socketShutdown)
-{
-    return SystemNative_Shutdown_IntPtr(socket, socketShutdown);
-}
-
-extern "C" Error SystemNative_Shutdown_IntPtr(intptr_t socket, int32_t socketShutdown)
+extern "C" Error SystemNative_Shutdown(intptr_t socket, int32_t socketShutdown)
 {
     int fd = ToFileDescriptor(socket);
 
@@ -1907,12 +1818,7 @@ extern "C" Error SystemNative_Shutdown_IntPtr(intptr_t socket, int32_t socketShu
     return err == 0 ? PAL_SUCCESS : SystemNative_ConvertErrorPlatformToPal(errno);
 }
 
-extern "C" Error SystemNative_GetSocketErrorOption(int32_t socket, Error* error)
-{
-    return SystemNative_GetSocketErrorOption_IntPtr(socket, error);
-}
-
-extern "C" Error SystemNative_GetSocketErrorOption_IntPtr(intptr_t socket, Error* error)
+extern "C" Error SystemNative_GetSocketErrorOption(intptr_t socket, Error* error)
 {
     if (error == nullptr)
     {
@@ -2155,12 +2061,6 @@ static bool TryGetPlatformSocketOption(int32_t socketOptionName, int32_t socketO
 }
 
 extern "C" Error SystemNative_GetSockOpt(
-    int32_t socket, int32_t socketOptionLevel, int32_t socketOptionName, uint8_t* optionValue, int32_t* optionLen)
-{
-    return SystemNative_GetSockOpt_IntPtr(socket, socketOptionLevel, socketOptionName, optionValue, optionLen);
-}
-
-extern "C" Error SystemNative_GetSockOpt_IntPtr(
     intptr_t socket, int32_t socketOptionLevel, int32_t socketOptionName, uint8_t* optionValue, int32_t* optionLen)
 {
     if (optionLen == nullptr || *optionLen < 0)
@@ -2189,13 +2089,7 @@ extern "C" Error SystemNative_GetSockOpt_IntPtr(
 }
 
 extern "C" Error
-SystemNative_SetSockOpt(int32_t socket, int32_t socketOptionLevel, int32_t socketOptionName, uint8_t* optionValue, int32_t optionLen)
-{
-    return SystemNative_SetSockOpt_IntPtr(socket, socketOptionLevel, socketOptionName, optionValue, optionLen);
-}
-
-extern "C" Error
-SystemNative_SetSockOpt_IntPtr(intptr_t socket, int32_t socketOptionLevel, int32_t socketOptionName, uint8_t* optionValue, int32_t optionLen)
+SystemNative_SetSockOpt(intptr_t socket, int32_t socketOptionLevel, int32_t socketOptionName, uint8_t* optionValue, int32_t optionLen)
 {
     if (optionLen < 0)
     {
@@ -2278,15 +2172,7 @@ static bool TryConvertProtocolTypePalToPlatform(int32_t palProtocolType, int* pl
     }
 }
 
-extern "C" Error SystemNative_Socket(int32_t addressFamily, int32_t socketType, int32_t protocolType, int32_t* createdSocket)
-{
-    intptr_t socket;
-    Error err = SystemNative_Socket_IntPtr(addressFamily, socketType, protocolType, &socket);
-    *createdSocket = ToFileDescriptorUnchecked(socket);
-    return err;
-}
-
-extern "C" Error SystemNative_Socket_IntPtr(int32_t addressFamily, int32_t socketType, int32_t protocolType, intptr_t* createdSocket)
+extern "C" Error SystemNative_Socket(int32_t addressFamily, int32_t socketType, int32_t protocolType, intptr_t* createdSocket)
 {
     if (createdSocket == nullptr)
     {
@@ -2318,12 +2204,7 @@ extern "C" Error SystemNative_Socket_IntPtr(int32_t addressFamily, int32_t socke
     return *createdSocket != -1 ? PAL_SUCCESS : SystemNative_ConvertErrorPlatformToPal(errno);
 }
 
-extern "C" Error SystemNative_GetBytesAvailable(int32_t socket, int32_t* available)
-{
-    return SystemNative_GetBytesAvailable_IntPtr(socket, available);
-}
-
-extern "C" Error SystemNative_GetBytesAvailable_IntPtr(intptr_t socket, int32_t* available)
+extern "C" Error SystemNative_GetBytesAvailable(intptr_t socket, int32_t* available)
 {
     if (available == nullptr)
     {
@@ -2619,15 +2500,7 @@ static Error WaitForSocketEventsInner(int32_t port, SocketEvent* buffer, int32_t
 #error Asynchronous sockets require epoll or kqueue support.
 #endif
 
-extern "C" Error SystemNative_CreateSocketEventPort(int32_t* port)
-{
-    intptr_t portIntPtr;
-    Error err = SystemNative_CreateSocketEventPort_IntPtr(&portIntPtr);
-    *port = ToFileDescriptor(portIntPtr);
-    return err;
-}
-
-extern "C" Error SystemNative_CreateSocketEventPort_IntPtr(intptr_t* port)
+extern "C" Error SystemNative_CreateSocketEventPort(intptr_t* port)
 {
     if (port == nullptr)
     {
@@ -2640,12 +2513,7 @@ extern "C" Error SystemNative_CreateSocketEventPort_IntPtr(intptr_t* port)
     return error;
 }
 
-extern "C" Error SystemNative_CloseSocketEventPort(int32_t port)
-{
-    return SystemNative_CloseSocketEventPort_IntPtr(port);
-}
-
-extern "C" Error SystemNative_CloseSocketEventPort_IntPtr(intptr_t port)
+extern "C" Error SystemNative_CloseSocketEventPort(intptr_t port)
 {
     return CloseSocketEventPortInner(ToFileDescriptor(port));
 }
@@ -2675,13 +2543,7 @@ extern "C" Error SystemNative_FreeSocketEventBuffer(SocketEvent* buffer)
 }
 
 extern "C" Error
-SystemNative_TryChangeSocketEventRegistration(int32_t port, int32_t socket, int32_t currentEvents, int32_t newEvents, uintptr_t data)
-{
-    return SystemNative_TryChangeSocketEventRegistration_IntPtr(port, socket, currentEvents, newEvents, data);
-}
-
-extern "C" Error
-SystemNative_TryChangeSocketEventRegistration_IntPtr(intptr_t port, intptr_t socket, int32_t currentEvents, int32_t newEvents, uintptr_t data)
+SystemNative_TryChangeSocketEventRegistration(intptr_t port, intptr_t socket, int32_t currentEvents, int32_t newEvents, uintptr_t data)
 {
     int portFd = ToFileDescriptor(port);
     int socketFd = ToFileDescriptor(socket);
@@ -2702,12 +2564,7 @@ SystemNative_TryChangeSocketEventRegistration_IntPtr(intptr_t port, intptr_t soc
         portFd, socketFd, static_cast<SocketEvents>(currentEvents), static_cast<SocketEvents>(newEvents), data);
 }
 
-extern "C" Error SystemNative_WaitForSocketEvents(int32_t port, SocketEvent* buffer, int32_t* count)
-{
-    return SystemNative_WaitForSocketEvents_IntPtr(port, buffer, count);
-}
-
-extern "C" Error SystemNative_WaitForSocketEvents_IntPtr(intptr_t port, SocketEvent* buffer, int32_t* count)
+extern "C" Error SystemNative_WaitForSocketEvents(intptr_t port, SocketEvent* buffer, int32_t* count)
 {
     if (buffer == nullptr || count == nullptr || *count < 0)
     {

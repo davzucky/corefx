@@ -12,14 +12,17 @@
       <SupportedFramework>net45;netcore45;wpa81</SupportedFramework>
     </ProjectReference>
     <ProjectReference Include="..\ref\System.Net.Primitives.csproj">
-      <SupportedFramework>net46;netcore50;netstandardapp1.5</SupportedFramework>
+      <SupportedFramework>net46;netcore50;netcoreapp1.0</SupportedFramework>
     </ProjectReference>
     <InboxOnTargetFramework Include="MonoAndroid10" />
     <InboxOnTargetFramework Include="MonoTouch10" />
-    <InboxOnTargetFramework Include="net45" />
+    <InboxOnTargetFramework Include="net45">
+      <FrameworkReference>System</FrameworkReference>
+    </InboxOnTargetFramework>
     <InboxOnTargetFramework Include="win8" />
     <InboxOnTargetFramework Include="wp80" />
     <InboxOnTargetFramework Include="wpa81" />
+    <InboxOnTargetFramework Include="portable-net45+win8+wp8+wpa81" />
     <InboxOnTargetFramework Include="xamarinios10" />
     <InboxOnTargetFramework Include="xamarinmac20" />
     <InboxOnTargetFramework Include="xamarintvos10" />

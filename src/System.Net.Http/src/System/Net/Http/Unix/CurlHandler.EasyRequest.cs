@@ -29,6 +29,7 @@ namespace System.Net.Http
 {
     internal partial class CurlHandler : HttpMessageHandler
     {
+        /// <summary>Provides all of the state associated with a single request/response, referred to as an "easy" request in libcurl parlance.</summary>
         private sealed class EasyRequest : TaskCompletionSource<HttpResponseMessage>
         {
             internal readonly CurlHandler _handler;
@@ -44,6 +45,7 @@ namespace System.Net.Http
             internal SendTransferState _sendTransferState;
             internal bool _isRedirect = false;
             internal Uri _targetUri;
+            internal StrongToWeakReference<EasyRequest> _selfStrongToWeakReference;
 
             private SafeCallbackHandle _callbackHandle;
 
@@ -56,7 +58,7 @@ namespace System.Net.Http
 
                 if (requestMessage.Content != null)
                 {
-                    _requestContentStream = new HttpContentAsyncStream(requestMessage.Content);
+                    _requestContentStream = new HttpContentAsyncStream(this);
                 }
 
                 _responseMessage = new CurlResponseMessage(this);
@@ -100,6 +102,8 @@ namespace System.Net.Http
                 // If the response message hasn't been published yet, do any final processing of it before it is.
                 if (!Task.IsCompleted)
                 {
+                    EventSourceTrace("Publishing response message");
+
                     // On Windows, if the response was automatically decompressed, Content-Encoding and Content-Length
                     // headers are removed from the response. Do the same thing here.
                     DecompressionMethods dm = _handler.AutomaticDecompression;
@@ -124,15 +128,31 @@ namespace System.Net.Http
                 }
 
                 // Now ensure it's published.
-                bool result = TrySetResult(_responseMessage);
-                Debug.Assert(result || Task.Status == TaskStatus.RanToCompletion,
+                bool completedTask = TrySetResult(_responseMessage);
+                Debug.Assert(completedTask || Task.Status == TaskStatus.RanToCompletion,
                     "If the task was already completed, it should have been completed successfully; " +
                     "we shouldn't be completing as successful after already completing as failed.");
+
+                // If we successfully transitioned it to be completed, we also handed off lifetime ownership
+                // of the response to the owner of the task.  Transition our reference on the EasyRequest
+                // to be weak instead of strong, so that we don't forcibly keep it alive.
+                if (completedTask)
+                {
+                    Debug.Assert(_selfStrongToWeakReference != null, "Expected non-null wrapper");
+                    _selfStrongToWeakReference.MakeWeak();
+                }
+            }
+
+            public void FailRequestAndCleanup(Exception error)
+            {
+                FailRequest(error);
+                Cleanup();
             }
 
             public void FailRequest(Exception error)
             {
                 Debug.Assert(error != null, "Expected non-null exception");
+                EventSourceTrace("Failing request: {0}", error);
 
                 var oce = error as OperationCanceledException;
                 if (oce != null)
@@ -182,9 +202,33 @@ namespace System.Net.Http
 
             private void SetUrl()
             {
-                EventSourceTrace("Url: {0}", _requestMessage.RequestUri);
-                SetCurlOption(CURLoption.CURLOPT_URL, _requestMessage.RequestUri.AbsoluteUri);
+                Uri requestUri = _requestMessage.RequestUri;
+
+                long scopeId;
+                if (IsLinkLocal(requestUri, out scopeId))
+                {
+                    // Uri.AbsoluteUri doesn't include the ScopeId/ZoneID, so if it is link-local,
+                    // we separately pass the scope to libcurl.
+                    EventSourceTrace("ScopeId: {0}", scopeId);
+                    SetCurlOption(CURLoption.CURLOPT_ADDRESS_SCOPE, scopeId);
+                }
+
+                EventSourceTrace("Url: {0}", requestUri);
+                SetCurlOption(CURLoption.CURLOPT_URL, requestUri.AbsoluteUri);
                 SetCurlOption(CURLoption.CURLOPT_PROTOCOLS, (long)(CurlProtocols.CURLPROTO_HTTP | CurlProtocols.CURLPROTO_HTTPS));
+            }
+
+            private static bool IsLinkLocal(Uri url, out long scopeId)
+            {
+                IPAddress ip;
+                if (IPAddress.TryParse(url.DnsSafeHost, out ip) && ip.IsIPv6LinkLocal)
+                {
+                    scopeId = ip.ScopeId;
+                    return true;
+                }
+
+                scopeId = 0;
+                return false;
             }
 
             private void SetMultithreading()
@@ -195,9 +239,7 @@ namespace System.Net.Http
             private void SetTimeouts()
             {
                 // Set timeout limit on the connect phase.
-                SetCurlOption(CURLoption.CURLOPT_CONNECTTIMEOUT_MS, _handler.ConnectTimeout == Timeout.InfiniteTimeSpan ? 
-                    int.MaxValue : 
-                    Math.Max(1, (long)_handler.ConnectTimeout.TotalMilliseconds));
+                SetCurlOption(CURLoption.CURLOPT_CONNECTTIMEOUT_MS, int.MaxValue);
 
                 // Override the default DNS cache timeout.  libcurl defaults to a 1 minute
                 // timeout, but we extend that to match the Windows timeout of 10 minutes.
@@ -403,13 +445,25 @@ namespace System.Net.Http
 
                 // Configure libcurl with the gathered proxy information
 
+                // uri.AbsoluteUri/ToString() omit IPv6 scope IDs.  SerializationInfoString ensures these details 
+                // are included, but does not properly handle international hosts.  As a workaround we check whether 
+                // the host is a link-local IP address, and based on that either return the SerializationInfoString 
+                // or the AbsoluteUri. (When setting the request Uri itself, we instead use CURLOPT_ADDRESS_SCOPE to
+                // set the scope id and the url separately, avoiding these issues and supporting versions of libcurl
+                // prior to v7.37 that don't support parsing scope IDs out of the url's host.  As similar feature
+                // doesn't exist for proxies.)
+                IPAddress ip;
+                string proxyUrl = IPAddress.TryParse(proxyUri.DnsSafeHost, out ip) && ip.IsIPv6LinkLocal ?
+                    proxyUri.GetComponents(UriComponents.SerializationInfoString, UriFormat.UriEscaped) :
+                    proxyUri.AbsoluteUri;
+
+                EventSourceTrace<string>("Proxy: {0}", proxyUrl);
                 SetCurlOption(CURLoption.CURLOPT_PROXYTYPE, (long)CURLProxyType.CURLPROXY_HTTP);
-                SetCurlOption(CURLoption.CURLOPT_PROXY, proxyUri.AbsoluteUri);
+                SetCurlOption(CURLoption.CURLOPT_PROXY, proxyUrl);
                 SetCurlOption(CURLoption.CURLOPT_PROXYPORT, proxyUri.Port);
-                EventSourceTrace("Proxy: {0}", proxyUri);
 
                 KeyValuePair<NetworkCredential, CURLAUTH> credentialScheme = GetCredentials(
-                    proxyUri, _handler.Proxy.Credentials, AuthTypesPermittedByCredentialKind(_handler.Proxy.Credentials));
+                    proxyUri, _handler.Proxy.Credentials, s_orderedAuthTypes);
                 SetProxyCredentials(credentialScheme.Key);
             }
 
@@ -645,10 +699,16 @@ namespace System.Net.Http
 
             internal sealed class SendTransferState
             {
-                internal readonly byte[] _buffer = new byte[RequestBufferSize]; // PERF TODO: Determine if this should be optimized to start smaller and grow
+                internal readonly byte[] _buffer;
                 internal int _offset;
                 internal int _count;
                 internal Task<int> _task;
+
+                internal SendTransferState(int bufferLength)
+                {
+                    Debug.Assert(bufferLength > 0 && bufferLength <= MaxRequestBufferSize, $"Expected 0 < bufferLength <= {MaxRequestBufferSize}, got {bufferLength}");
+                    _buffer = new byte[bufferLength];
+                }
 
                 internal void SetTaskOffsetCount(Task<int> task, int offset, int count)
                 {

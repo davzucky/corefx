@@ -12,7 +12,7 @@ using System.Threading;
 
 namespace System.Net.Sockets.Tests
 {
-    // TODO:
+    // TODO (#7852):
     //
     // - Connect(EndPoint):
     //   - disconnected socket
@@ -489,7 +489,6 @@ namespace System.Net.Sockets.Tests
             Assert.Throws<ArgumentException>(() => GetSocket().SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.NoDelay, new object()));
         }
 
-        // TODO: Select
         [Fact]
         public void Select_NullOrEmptyLists_Throws_ArgumentNull()
         {
@@ -779,7 +778,7 @@ namespace System.Net.Sockets.Tests
                 // Connect once, to an invalid address, expecting failure
                 //
                 EndPoint ep = new IPEndPoint(IPAddress.Broadcast, 1234);
-                Assert.Throws<SocketException>(() => client.Connect(ep));
+                Assert.ThrowsAny<SocketException>(() => client.Connect(ep));
 
                 //
                 // Connect again, expecting PlatformNotSupportedException
@@ -1193,6 +1192,28 @@ namespace System.Net.Sockets.Tests
             IPPacketInformation packetInfo;
 
             Assert.Throws<ArgumentNullException>(() => GetSocket().EndReceiveMessageFrom(null, ref flags, ref remote, out packetInfo));
+        }
+
+        [Fact]
+        [PlatformSpecific(PlatformID.AnyUnix)]
+        public void TcpClient_ConnectAsync_StringHost_NotSupportedAfterClientAccess()
+        {
+            using (TcpClient client = new TcpClient())
+            {
+                var tmp = client.Client;
+                Assert.Throws<PlatformNotSupportedException>(() => { client.ConnectAsync("localhost", 12345); });
+            }
+        }
+
+        [Fact]
+        [PlatformSpecific(PlatformID.AnyUnix)]
+        public void TcpClient_ConnectAsync_ArrayOfAddresses_NotSupportedAfterClientAccess()
+        {
+            using (TcpClient client = new TcpClient())
+            {
+                var tmp = client.Client;
+                Assert.Throws<PlatformNotSupportedException>(() => { client.ConnectAsync(new[] { IPAddress.Loopback }, 12345); });
+            }
         }
     }
 }

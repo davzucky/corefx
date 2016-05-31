@@ -6,8 +6,9 @@ namespace System.Net.Test.Common
 {
     internal class HttpTestServers
     {
-        public const string Host = "corefx-net.cloudapp.net";
-        public const string Http2Host = "http2.akamai.com";
+        public readonly static string Host = TestSettings.Http.Host;
+        public readonly static string SecureHost = TestSettings.Http.SecureHost;
+        public readonly static string Http2Host = TestSettings.Http.Http2Host;
 
         public const string SSLv2RemoteServer = "https://www.ssllabs.com:10200/";
         public const string SSLv3RemoteServer = "https://www.ssllabs.com:10300/";
@@ -32,10 +33,10 @@ namespace System.Net.Test.Common
         private const string GZipHandler = "GZip.ashx";
 
         public readonly static Uri RemoteEchoServer = new Uri("http://" + Host + "/" + EchoHandler);
-        public readonly static Uri SecureRemoteEchoServer = new Uri("https://" + Host + "/" + EchoHandler);
+        public readonly static Uri SecureRemoteEchoServer = new Uri("https://" + SecureHost + "/" + EchoHandler);
 
         public readonly static Uri RemoteVerifyUploadServer = new Uri("http://" + Host + "/" + VerifyUploadHandler);
-        public readonly static Uri SecureRemoteVerifyUploadServer = new Uri("https://" + Host + "/" + VerifyUploadHandler);
+        public readonly static Uri SecureRemoteVerifyUploadServer = new Uri("https://" + SecureHost + "/" + VerifyUploadHandler);
 
         public readonly static Uri RemoteEmptyContentServer = new Uri("http://" + Host + "/" + EmptyContentHandler);
         public readonly static Uri RemoteDeflateServer = new Uri("http://" + Host + "/" + DeflateHandler);
@@ -91,42 +92,45 @@ namespace System.Net.Test.Common
                     statusDescription));
         }
 
-        public static Uri RedirectUriForDestinationUri(bool secure, Uri destinationUri, int hops)
+        public static Uri RedirectUriForDestinationUri(bool secure, int statusCode, Uri destinationUri, int hops)
         {
             string uriString;
             string destination = Uri.EscapeDataString(destinationUri.AbsoluteUri);
-            
+
             if (hops > 1)
             {
-                uriString = string.Format("{0}://{1}/{2}?uri={3}&hops={4}",
+                uriString = string.Format("{0}://{1}/{2}?statuscode={3}&uri={4}&hops={5}",
                     secure ? HttpsScheme : HttpScheme,
                     Host,
                     RedirectHandler,
+                    statusCode,
                     destination,
                     hops);
             }
             else
             {
-                uriString = string.Format("{0}://{1}/{2}?uri={3}",
+                uriString = string.Format("{0}://{1}/{2}?statuscode={3}&uri={4}",
                     secure ? HttpsScheme : HttpScheme,
                     Host,
                     RedirectHandler,
+                    statusCode,
                     destination);
             }
             
             return new Uri(uriString);
         }
 
-        public static Uri RedirectUriForCreds(bool secure, string userName, string password)
+        public static Uri RedirectUriForCreds(bool secure, int statusCode, string userName, string password)
         {
-                Uri destinationUri = BasicAuthUriForCreds(secure, userName, password);
-                string destination = Uri.EscapeDataString(destinationUri.AbsoluteUri);
-                
-                return new Uri(string.Format("{0}://{1}/{2}?uri={3}",
-                    secure ? HttpsScheme : HttpScheme,
-                    Host,
-                    RedirectHandler,
-                    destination));
+            Uri destinationUri = BasicAuthUriForCreds(secure, userName, password);
+            string destination = Uri.EscapeDataString(destinationUri.AbsoluteUri);
+            
+            return new Uri(string.Format("{0}://{1}/{2}?statuscode={3}&uri={4}",
+                secure ? HttpsScheme : HttpScheme,
+                Host,
+                RedirectHandler,
+                statusCode,
+                destination));
         }
     }
 }

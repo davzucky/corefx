@@ -9,7 +9,7 @@
       <SupportedFramework>net45;netcore45;wp8;wpa81</SupportedFramework>
     </ProjectReference>
     <ProjectReference Include="..\ref\System.Text.Encoding.Extensions.csproj">
-      <SupportedFramework>net46;netcore50;netstandardapp1.5</SupportedFramework>
+      <SupportedFramework>net46;netcore50;netcoreapp1.0</SupportedFramework>
     </ProjectReference>
     <ProjectReference Include="any\System.Text.Encoding.Extensions.pkgproj" />
     <ProjectReference Include="aot\System.Text.Encoding.Extensions.pkgproj" />
@@ -19,6 +19,7 @@
     <InboxOnTargetFramework Include="win8" />
     <InboxOnTargetFramework Include="wp80" />
     <InboxOnTargetFramework Include="wpa81" />
+    <InboxOnTargetFramework Include="portable-net45+win8+wp8+wpa81" />
     <InboxOnTargetFramework Include="xamarinios10" />
     <InboxOnTargetFramework Include="xamarinmac20" />
     <InboxOnTargetFramework Include="xamarintvos10" />

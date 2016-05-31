@@ -12,7 +12,7 @@
       <SupportedFramework>net46;netcore50</SupportedFramework>
     </ProjectReference>
     <ProjectReference Include="..\ref\System.Runtime.InteropServices.csproj">
-      <SupportedFramework>net462;netstandardapp1.5</SupportedFramework>
+      <SupportedFramework>net462;netcoreapp1.0</SupportedFramework>
     </ProjectReference>
     <ProjectReference Include="..\src\System.Runtime.InteropServices.csproj">
       <TargetGroup>net462</TargetGroup>
@@ -21,9 +21,12 @@
     <ProjectReference Include="aot\System.Runtime.InteropServices.pkgproj" />
     <InboxOnTargetFramework Include="MonoAndroid10" />
     <InboxOnTargetFramework Include="MonoTouch10" />
-    <InboxOnTargetFramework Include="net45" />
+    <InboxOnTargetFramework Include="net45">
+      <FrameworkReference>System.Core;System</FrameworkReference>
+    </InboxOnTargetFramework>
     <InboxOnTargetFramework Include="win8" />
     <InboxOnTargetFramework Include="wpa81" />
+    <InboxOnTargetFramework Include="portable-net45+win8+wpa81" />
     <InboxOnTargetFramework Include="xamarinios10" />
     <InboxOnTargetFramework Include="xamarinmac20" />
     <InboxOnTargetFramework Include="xamarintvos10" />

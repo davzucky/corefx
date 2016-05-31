@@ -1,5 +1,5 @@
 @if "%_echo%" neq "on" echo off
-setlocal
+setlocal EnableDelayedExpansion
 
 :: Note: We've disabled node reuse because it causes file locking issues.
 ::       The issue is that we extend the build with our own targets which
@@ -8,9 +8,34 @@ setlocal
 
 :ReadArguments
 :: Read in the args to determine whether to run the native build, managed build, or both (default)
-set "__args=%*"
-if /i [%1] == [native] (set __buildSpec=native&&set "__args=%__args:~6%"&&shift&&goto Tools)
-if /i [%1] == [managed] (set __buildSpec=managed&&set "__args=%__args:~7%"&&shift&&goto Tools)
+set "__args= %*"
+set processedArgs=
+set unprocessedBuildArgs=
+
+:Loop
+if [%1]==[] goto Tools
+
+if /I [%1]==[native] (
+    set __buildSpec=native
+    set processedArgs=!processedArgs! %1
+    goto Next
+)
+
+if /I [%1] == [managed] (
+    set __buildSpec=managed
+    set processedArgs=!processedArgs! %1
+    goto Next
+)
+
+if [!processedArgs!]==[] (
+  call set unprocessedBuildArgs=!__args!
+) else (
+  call set unprocessedBuildArgs=%%__args:*!processedArgs!=%%
+)
+
+:Next
+shift /1
+goto Loop
 
 :Tools
 :: Setup VS
@@ -35,6 +60,12 @@ if "%__buildSpec%"=="managed"  goto :BuildManaged
 :BuildNative
 :: Run the Native Windows build
 echo [%time%] Building Native Libraries...
+:: Generate Native versioning assets
+set __binDir=%~dp0bin
+set __versionLog=%~dp0version.log
+if not exist "%__binDir%\obj\_version.h" (
+    msbuild "%~dp0build.proj" /nologo /t:GenerateVersionHeader /p:GenerateNativeVersionInfo=true > "%__versionLog%"
+)
 IF EXIST "%~dp0src\native\Windows\build-native.cmd" (
     call %~dp0src\native\Windows\build-native.cmd %__args% >nativebuild.log
     IF ERRORLEVEL 1 (
@@ -72,7 +103,7 @@ call :build %__args%
 goto :AfterBuild
 
 :build
-%_buildprefix% msbuild "%_buildproj%" /nologo /maxcpucount /v:minimal /clp:Summary /nodeReuse:false /flp:v=normal;LogFile="%_buildlog%";Append "/l:BinClashLogger,%_binclashLoggerDll%;LogFile=%_binclashlog%" %__args% %_buildpostfix%
+%_buildprefix% msbuild "%_buildproj%" /nologo /maxcpucount /v:minimal /clp:Summary /nodeReuse:false /flp:v=normal;LogFile="%_buildlog%";Append /flp2:warningsonly;logfile=%~dp0msbuild.wrn /flp3:errorsonly;logfile=%~dp0msbuild.err "/l:BinClashLogger,%_binclashLoggerDll%;LogFile=%_binclashlog%" !unprocessedBuildArgs! %_buildpostfix%
 set BUILDERRORLEVEL=%ERRORLEVEL%
 goto :eof
 

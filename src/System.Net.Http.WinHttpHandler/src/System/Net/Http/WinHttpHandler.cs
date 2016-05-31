@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for more information.
 
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Globalization;
 using System.IO;
@@ -57,7 +58,7 @@ namespace System.Net.Http
         private CookieUsePolicy _cookieUsePolicy = CookieUsePolicy.UseInternalCookieStoreOnly;
         private CookieContainer _cookieContainer = null;
 
-        private SslProtocols _sslProtocols = SecurityProtocol.DefaultSecurityProtocols;
+        private SslProtocols _sslProtocols = SslProtocols.None; // Use most secure protocols available.
         private Func<
             HttpRequestMessage,
             X509Certificate2,
@@ -70,15 +71,15 @@ namespace System.Net.Http
         private ICredentials _serverCredentials = null;
         private bool _preAuthenticate = false;
         private WindowsProxyUsePolicy _windowsProxyUsePolicy = WindowsProxyUsePolicy.UseWinHttpProxy;
-        private ICredentials _defaultProxyCredentials = CredentialCache.DefaultCredentials;
+        private ICredentials _defaultProxyCredentials = null;
         private IWebProxy _proxy = null;
         private int _maxConnectionsPerServer = int.MaxValue;
-        private TimeSpan _connectTimeout = TimeSpan.FromSeconds(60);
         private TimeSpan _sendTimeout = TimeSpan.FromSeconds(30);
         private TimeSpan _receiveHeadersTimeout = TimeSpan.FromSeconds(30);
         private TimeSpan _receiveDataTimeout = TimeSpan.FromSeconds(30);
         private int _maxResponseHeadersLength = 64 * 1024;
         private int _maxResponseDrainSize = 64 * 1024;
+        private IDictionary<String, Object> _properties; // Only create dictionary when required.
         private volatile bool _operationStarted;
         private volatile bool _disposed;
         private SafeWinHttpHandle _sessionHandle;
@@ -116,7 +117,7 @@ namespace System.Net.Http
                 if (value <= 0)
                 {
                     throw new ArgumentOutOfRangeException(
-nameof(value),
+                        nameof(value),
                         value,
                         SR.Format(SR.net_http_value_must_be_greater_than, 0));
                 }
@@ -184,7 +185,7 @@ nameof(value),
 
             set
             {
-                SecurityProtocol.ThrowOnNotAllowed(value, allowNone: false);
+                SecurityProtocol.ThrowOnNotAllowed(value, allowNone: true);
 
                 CheckDisposedOrStarted();
                 _sslProtocols = value;
@@ -220,6 +221,7 @@ nameof(value),
 
             set
             {
+                CheckDisposedOrStarted();
                 _checkCertificateRevocationList = value;
             }
         }
@@ -347,32 +349,13 @@ nameof(value),
                     // In WinHTTP, setting this to 0 results in it being reset to 2.
                     // So, we'll only allow settings above 0.
                     throw new ArgumentOutOfRangeException(
-nameof(value),
+                        nameof(value),
                         value,
                         SR.Format(SR.net_http_value_must_be_greater_than, 0));
                 }
 
                 CheckDisposedOrStarted();
                 _maxConnectionsPerServer = value;
-            }
-        }
-
-        public TimeSpan ConnectTimeout
-        {
-            get
-            {
-                return _connectTimeout;
-            }
-
-            set
-            {
-                if (value != Timeout.InfiniteTimeSpan && (value <= TimeSpan.Zero || value > s_maxTimeout))
-                {
-                    throw new ArgumentOutOfRangeException(nameof(value));
-                }
-
-                CheckDisposedOrStarted();
-                _connectTimeout = value;
             }
         }
 
@@ -445,7 +428,7 @@ nameof(value),
                 if (value <= 0)
                 {
                     throw new ArgumentOutOfRangeException(
-nameof(value),
+                        nameof(value),
                         value,
                         SR.Format(SR.net_http_value_must_be_greater_than, 0));
                 }
@@ -467,13 +450,26 @@ nameof(value),
                 if (value <= 0)
                 {
                     throw new ArgumentOutOfRangeException(
-nameof(value),
+                        nameof(value),
                         value,
                         SR.Format(SR.net_http_value_must_be_greater_than, 0));
                 }
 
                 CheckDisposedOrStarted();
                 _maxResponseDrainSize = value;
+            }
+        }
+
+        public IDictionary<string, object> Properties
+        {
+            get
+            {
+                if (_properties == null)
+                {
+                    _properties = new Dictionary<String, object>();
+                }
+
+                return _properties;
             }
         }
         #endregion
@@ -623,7 +619,7 @@ nameof(value),
             // Serialize entity-body (content) headers.
             if (requestMessage.Content != null)
             {
-                // TODO: Content-Length header isn't getting correctly placed using ToString()
+                // TODO (#5523): Content-Length header isn't getting correctly placed using ToString()
                 // This is a bug in HttpContentHeaders that needs to be fixed.
                 if (requestMessage.Content.Headers.ContentLength.HasValue)
                 {
@@ -920,17 +916,20 @@ nameof(value),
         private void SetSessionHandleTlsOptions(SafeWinHttpHandle sessionHandle)
         {
             uint optionData = 0;
-            if ((_sslProtocols & SslProtocols.Tls) != 0)
+            SslProtocols sslProtocols = 
+                (_sslProtocols == SslProtocols.None) ? SecurityProtocol.DefaultSecurityProtocols : _sslProtocols;
+
+            if ((sslProtocols & SslProtocols.Tls) != 0)
             {
                 optionData |= Interop.WinHttp.WINHTTP_FLAG_SECURE_PROTOCOL_TLS1;
             }
 
-            if ((_sslProtocols & SslProtocols.Tls11) != 0)
+            if ((sslProtocols & SslProtocols.Tls11) != 0)
             {
                 optionData |= Interop.WinHttp.WINHTTP_FLAG_SECURE_PROTOCOL_TLS1_1;
             }
 
-            if ((_sslProtocols & SslProtocols.Tls12) != 0)
+            if ((sslProtocols & SslProtocols.Tls12) != 0)
             {
                 optionData |= Interop.WinHttp.WINHTTP_FLAG_SECURE_PROTOCOL_TLS1_2;
             }
@@ -943,7 +942,7 @@ nameof(value),
             if (!Interop.WinHttp.WinHttpSetTimeouts(
                 sessionHandle,
                 0,
-                (int)_connectTimeout.TotalMilliseconds,
+                0,
                 (int)_sendTimeout.TotalMilliseconds,
                 (int)_receiveHeadersTimeout.TotalMilliseconds))
             {
@@ -1160,28 +1159,18 @@ nameof(value),
 
         private void SetRequestHandleCredentialsOptions(WinHttpRequestState state)
         {
-            // Set WinHTTP to send/prevent default credentials for either proxy or server auth.
-            bool useDefaultCredentials = false;
-            if (state.ServerCredentials == CredentialCache.DefaultCredentials)
-            {
-                useDefaultCredentials = true;
-            }
-            else if (state.WindowsProxyUsePolicy != WindowsProxyUsePolicy.DoNotUseProxy)
-            {
-                if (state.Proxy == null && _defaultProxyCredentials == CredentialCache.DefaultCredentials)
-                {
-                    useDefaultCredentials = true;
-                }
-                else if (state.Proxy != null && state.Proxy.Credentials == CredentialCache.DefaultCredentials)
-                {
-                    useDefaultCredentials = true;
-                }
-            }
-
-            uint optionData = useDefaultCredentials ? 
-                Interop.WinHttp.WINHTTP_AUTOLOGON_SECURITY_LEVEL_LOW : 
-                Interop.WinHttp.WINHTTP_AUTOLOGON_SECURITY_LEVEL_HIGH;
-            SetWinHttpOption(state.RequestHandle, Interop.WinHttp.WINHTTP_OPTION_AUTOLOGON_POLICY, ref optionData);
+            // By default, WinHTTP sets the default credentials policy such that it automatically sends default credentials
+            // (current user's logged on Windows credentials) to a proxy when needed (407 response). It only sends
+            // default credentials to a server (401 response) if the server is considered to be on the Intranet.
+            // WinHttpHandler uses a more granual opt-in model for using default credentials that can be different between
+            // proxy and server credentials. It will explicitly allow default credentials to be sent at a later stage in
+            // the request processing (after getting a 401/407 response) when the proxy or server credential is set as
+            // CredentialCache.DefaultNetworkCredential. For now, we set the policy to prevent any default credentials
+            // from being automatically sent until we get a 401/407 response.
+            _authHelper.ChangeDefaultCredentialsPolicy(
+                state.RequestHandle,
+                Interop.WinHttp.WINHTTP_AUTH_TARGET_SERVER,
+                allowDefaultCredentials:false);
         }
 
         private void SetRequestHandleBufferingOptions(SafeWinHttpHandle requestHandle)

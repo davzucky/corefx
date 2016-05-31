@@ -8,10 +8,9 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <!-- use Win10 temporarily as the distinguishing factor, in reality the distinction is app-container vs not. -->
-    <File Include="$(WinNativePath)..\..\NetCoreForCoreCLR\native\clrcompression.dll">
-      <TargetPath>runtimes/win10-$(PackagePlatform)/native</TargetPath>
-    </File>
+    <NativeFile Include="$(WinNativePath)..\..\NetCoreForCoreCLR\native\clrcompression.dll">
+      <TargetPath>runtimes/win10-$(PackagePlatform)/lib/netcore50</TargetPath>
+    </NativeFile>
   </ItemGroup>
 
   <Import Project="$([MSBuild]::GetDirectoryNameOfFileAbove($(MSBuildThisFileDirectory), dir.targets))\dir.targets" />

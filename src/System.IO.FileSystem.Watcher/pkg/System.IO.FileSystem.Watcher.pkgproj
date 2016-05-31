@@ -3,11 +3,10 @@
   <Import Project="$([MSBuild]::GetDirectoryNameOfFileAbove($(MSBuildThisFileDirectory), dir.props))\dir.props" />
   <ItemGroup>
     <ProjectReference Include="..\ref\System.IO.FileSystem.Watcher.csproj">
-      <SupportedFramework>net46;netstandardapp1.5</SupportedFramework>
+      <SupportedFramework>net46;netcoreapp1.0</SupportedFramework>
     </ProjectReference>
     <ProjectReference Include="..\src\System.IO.FileSystem.Watcher.builds" />
 
-    <ProjectReference Include="$(NativePackagePath)\runtime.native.System\runtime.native.System.pkgproj" />
   </ItemGroup>
   <ItemGroup>
     <InboxOnTargetFramework Include="MonoAndroid10" />

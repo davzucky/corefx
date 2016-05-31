@@ -23,6 +23,11 @@ namespace System.Net.Sockets
             return Interop.Sys.PlatformSupportsDualModeIPv4PacketInfo();
         }
 
+        public static void Initialize()
+        {
+            // nop.  No initialization required.
+        }
+
         public static SocketError GetSocketErrorForErrorCode(Interop.Error errorCode)
         {
             return SocketErrorPal.GetSocketErrorForNativeError(errorCode);
@@ -958,6 +963,14 @@ namespace System.Net.Sockets
                 }
             }
 
+            if (optionName == SocketOptionName.Error)
+            {
+                Interop.Error socketError = default(Interop.Error);
+                Interop.Error getErrorError = Interop.Sys.GetSocketErrorOption(handle, &socketError);
+                optionValue = (int)GetSocketErrorForErrorCode(socketError);
+                return getErrorError == Interop.Error.SUCCESS ? SocketError.Success : GetSocketErrorForErrorCode(getErrorError);
+            }
+
             int value = 0;
             int optLen = sizeof(int);
             Interop.Error err = Interop.Sys.GetSockOpt(handle, optionLevel, optionName, (byte*)&value, &optLen);
@@ -975,6 +988,21 @@ namespace System.Net.Sockets
             {
                 optLen = 0;
                 err = Interop.Sys.GetSockOpt(handle, optionLevel, optionName, null, &optLen);
+            }
+            else if (optionName == SocketOptionName.Error && optionValue.Length >= sizeof(int))
+            {
+                int outError;
+                SocketError returnError = GetSockOpt(handle, optionLevel, optionName, out outError);
+                if (returnError == SocketError.Success)
+                {
+                    fixed (byte* pinnedValue = optionValue)
+                    {
+                        Debug.Assert(BitConverter.IsLittleEndian, "Expected little endian");
+                        *((int*)pinnedValue) = outError;
+                    }
+                    optionLength = sizeof(int);
+                }
+                return returnError;
             }
             else
             {
@@ -1287,6 +1315,7 @@ namespace System.Net.Sockets
         public static SocketError AcceptAsync(Socket socket, SafeCloseSocket handle, SafeCloseSocket acceptHandle, int receiveSize, int socketAddressSize, AcceptOverlappedAsyncResult asyncResult)
         {
             Debug.Assert(acceptHandle == null, $"Unexpected acceptHandle: {acceptHandle}");
+            Debug.Assert(receiveSize == 0, $"Unexpected receiveSize: {receiveSize}");
 
             byte[] socketAddressBuffer = new byte[socketAddressSize];
 

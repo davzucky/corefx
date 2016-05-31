@@ -25,15 +25,15 @@ fi
 echo "Running init-tools.sh"
 $working_tree_root/init-tools.sh
 
-echo -e "\n$working_tree_root/Tools/corerun $working_tree_root/Tools/MSBuild.exe $working_tree_root/src/publish.builds $options $allargs" >> $publish_packages_log
-$working_tree_root/Tools/corerun $working_tree_root/Tools/MSBuild.exe $working_tree_root/src/publish.builds $options $allargs
+echo -e "\n$working_tree_root/Tools/corerun $working_tree_root/Tools/MSBuild.exe $working_tree_root/src/publish.proj $options $allargs" >> $publish_packages_log
+$working_tree_root/Tools/corerun $working_tree_root/Tools/MSBuild.exe $working_tree_root/src/publish.proj $options $allargs
 
 if [ $? -ne 0 ]; then
     echo -e "\nAn error occurred. Aborting publish-packages.sh ." >> $publish_packages_log
-    echo "ERROR: An error occurred while building packages, see $publish_packages_log for more details."
+    echo "ERROR: An error occurred while publishing packages, see $publish_packages_log for more details."
     exit 1
 fi
 
-echo "Done building packages."
-echo -e "\nDone building packages." >> $publish_packages_log
+echo "Done publishing packages."
+echo -e "\nDone publishing packages." >> $publish_packages_log
 exit 0

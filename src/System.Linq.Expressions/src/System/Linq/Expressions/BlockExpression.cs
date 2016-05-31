@@ -899,10 +899,7 @@ namespace System.Linq.Expressions
                 {
                     var lastExpression = expressionList[expressionCount - 1];
 
-                    if (lastExpression == null)
-                    {
-                        throw Error.ArgumentNull(nameof(expressions));
-                    }
+                    ContractUtils.RequiresNotNull(lastExpression, nameof(expressions));
 
                     if (lastExpression.Type == type)
                     {
@@ -972,11 +969,11 @@ namespace System.Linq.Expressions
                     }
                     if (v.IsByRef)
                     {
-                        throw Error.VariableMustNotBeByRef(v, v.Type);
+                        throw Error.VariableMustNotBeByRef(v, v.Type, $"{collectionName}[{i}]");
                     }
                     if (!set.Add(v))
                     {
-                        throw Error.DuplicateVariable(v);
+                        throw Error.DuplicateVariable(v, $"{collectionName}[{i}]");
                     }
                 }
             }

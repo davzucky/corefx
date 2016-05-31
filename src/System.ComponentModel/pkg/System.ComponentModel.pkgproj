@@ -6,15 +6,18 @@
   <Import Project="$([MSBuild]::GetDirectoryNameOfFileAbove($(MSBuildThisFileDirectory), dir.props))\dir.props" />
   <ItemGroup>
     <ProjectReference Include="..\ref\System.ComponentModel.csproj">
-      <SupportedFramework>net45;netcore45;netstandardapp1.5;wp8;wpa81</SupportedFramework>
+      <SupportedFramework>net45;netcore45;netcoreapp1.0;wp8;wpa81</SupportedFramework>
     </ProjectReference>
     <ProjectReference Include="..\src\System.ComponentModel.builds" />
     <InboxOnTargetFramework Include="MonoAndroid10" />
     <InboxOnTargetFramework Include="MonoTouch10" />
-    <InboxOnTargetFramework Include="net45" />
+    <InboxOnTargetFramework Include="net45">
+      <FrameworkReference>System</FrameworkReference>
+    </InboxOnTargetFramework>
     <InboxOnTargetFramework Include="win8" />
     <InboxOnTargetFramework Include="wp80" />
     <InboxOnTargetFramework Include="wpa81" />
+    <InboxOnTargetFramework Include="portable-net45+win8+wp8+wpa81" />
     <InboxOnTargetFramework Include="xamarinios10" />
     <InboxOnTargetFramework Include="xamarinmac20" />
     <InboxOnTargetFramework Include="xamarintvos10" />

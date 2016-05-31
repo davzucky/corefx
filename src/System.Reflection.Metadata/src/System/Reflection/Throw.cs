@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for more information.
 
+using System.Reflection.Metadata;
 using System.Reflection.Metadata.Ecma335;
 using System.Runtime.CompilerServices;
 
@@ -11,6 +12,48 @@ namespace System.Reflection
     // Also it improves the likelihood that callers will be inlined.
     internal static class Throw
     {
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        internal static void InvalidCast()
+        {
+            throw new InvalidCastException();
+        }
+
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        internal static void LitteEndianArchitectureRequired()
+        {
+            throw new PlatformNotSupportedException(SR.LitteEndianArchitectureRequired);
+        }
+
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        internal static void InvalidArgument_OffsetForVirtualHeapHandle()
+        {
+            throw new ArgumentException(SR.CantGetOffsetForVirtualHeapHandle, "handle");
+        }
+
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        internal static void SignatureNotVarArg()
+        {
+            throw new InvalidOperationException(SR.SignatureNotVarArg);
+        }
+
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        internal static void BranchBuilderNotAvailable()
+        {
+            throw new InvalidOperationException(SR.BranchBuilderNotAvailable);
+        }
+
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        internal static void InvalidOperationBuilderAlreadyLinked()
+        {
+            throw new InvalidOperationException(SR.BuilderAlreadyLinked);
+        }
+
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        internal static void LabelDoesntBelongToBuilder(string parameterName)
+        {
+            throw new ArgumentException(SR.LabelDoesntBelongToBuilder, parameterName);
+        }
+
         [MethodImpl(MethodImplOptions.NoInlining)]
         internal static void HeapHandleRequired()
         {
@@ -30,9 +73,33 @@ namespace System.Reflection
         }
 
         [MethodImpl(MethodImplOptions.NoInlining)]
+        internal static void ArgumentNull(string parameterName)
+        {
+            throw new ArgumentNullException(parameterName);
+        }
+
+        [MethodImpl(MethodImplOptions.NoInlining)]
         internal static void ValueArgumentNull()
         {
             throw new ArgumentNullException("value");
+        }
+
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        internal static void BuilderArgumentNull()
+        {
+            throw new ArgumentNullException("builder");
+        }
+
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        internal static void ArgumentOutOfRange(string parameterName)
+        {
+            throw new ArgumentOutOfRangeException(parameterName);
+        }
+
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        internal static void BlobTooLarge(string parameterName)
+        {
+            throw new ArgumentOutOfRangeException(parameterName, SR.BlobTooLarge);
         }
 
         [MethodImpl(MethodImplOptions.NoInlining)]
@@ -48,9 +115,21 @@ namespace System.Reflection
         }
 
         [MethodImpl(MethodImplOptions.NoInlining)]
+        internal static void ValueArgumentOutOfRange()
+        {
+            throw new ArgumentOutOfRangeException("value");
+        }
+
+        [MethodImpl(MethodImplOptions.NoInlining)]
         internal static void OutOfBounds()
         {
             throw new BadImageFormatException(SR.OutOfBoundsRead);
+        }
+
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        internal static void WriteOutOfBounds()
+        {
+            throw new InvalidOperationException(SR.OutOfBoundsWrite);
         }
 
         [MethodImpl(MethodImplOptions.NoInlining)]
@@ -108,15 +187,21 @@ namespace System.Reflection
         }
 
         [MethodImpl(MethodImplOptions.NoInlining)]
-        internal static void InvalidCast()
+        internal static void ValueOverflow()
         {
-            throw new InvalidCastException();
+            throw new BadImageFormatException(SR.ValueTooLarge);
         }
 
         [MethodImpl(MethodImplOptions.NoInlining)]
         internal static void SequencePointValueOutOfRange()
         {
             throw new BadImageFormatException(SR.SequencePointValueOutOfRange);
+        }
+
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        internal static void HeapSizeLimitExceeded(HeapIndex heap)
+        {
+            throw new ImageFormatLimitationException(SR.Format(SR.HeapSizeLimitExceeded, heap));
         }
     }
 }

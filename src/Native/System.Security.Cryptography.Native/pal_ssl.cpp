@@ -7,6 +7,7 @@
 
 #include <assert.h>
 #include <string.h>
+#include <openssl/err.h>
 
 static_assert(PAL_SSL_ERROR_NONE == SSL_ERROR_NONE, "");
 static_assert(PAL_SSL_ERROR_SSL == SSL_ERROR_SSL, "");
@@ -413,11 +414,13 @@ err:
 
 extern "C" int32_t CryptoNative_SslWrite(SSL* ssl, const void* buf, int32_t num)
 {
+    ERR_clear_error();
     return SSL_write(ssl, buf, num);
 }
 
 extern "C" int32_t CryptoNative_SslRead(SSL* ssl, void* buf, int32_t num)
 {
+    ERR_clear_error();
     return SSL_read(ssl, buf, num);
 }
 
@@ -428,6 +431,7 @@ extern "C" int32_t CryptoNative_IsSslRenegotiatePending(SSL* ssl)
 
 extern "C" int32_t CryptoNative_SslShutdown(SSL* ssl)
 {
+    ERR_clear_error();
     return SSL_shutdown(ssl);
 }
 
@@ -438,6 +442,7 @@ extern "C" void CryptoNative_SslSetBio(SSL* ssl, BIO* rbio, BIO* wbio)
 
 extern "C" int32_t CryptoNative_SslDoHandshake(SSL* ssl)
 {
+    ERR_clear_error();
     return SSL_do_handshake(ssl);
 }
 
@@ -534,6 +539,8 @@ extern "C" void CryptoNative_SslCtxSetClientCertCallback(SSL_CTX* ctx, SslClient
 
 extern "C" void CryptoNative_GetStreamSizes(int32_t* header, int32_t* trailer, int32_t* maximumMessage)
 {
+    // This function is kept for compatibility with RC2 builds on a jagged upgrade path.
+    // Removal is tracked via issue #8504.
     if (header)
     {
         *header = SSL3_RT_HEADER_LENGTH;
@@ -541,11 +548,6 @@ extern "C" void CryptoNative_GetStreamSizes(int32_t* header, int32_t* trailer, i
 
     if (trailer)
     {
-        // TODO (Issue #4223) : Trailer size requirement is changing based on protocol
-        //       SSL3/TLS1.0 - 68, TLS1.1 - 37 and TLS1.2 - 24
-        //       Current usage is only to compute max input buffer size for
-        //       encryption and so setting to the max
-
         *trailer = 68;
     }
 

@@ -2,7 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for more information.
 
-using System;
+using System.Collections.Generic;
 using Xunit;
 
 namespace System.Linq.Expressions.Tests
@@ -768,13 +768,44 @@ namespace System.Linq.Expressions.Tests
         public static void InvalidTypeValueType()
         {
             // implicit cast, but not reference assignable.
-            Assert.Throws<ArgumentException>(() => Expression.Constant(0, typeof(long)));
+            Assert.Throws<ArgumentException>(null, () => Expression.Constant(0, typeof(long)));
         }
 
         [Fact]
         public static void InvalidTypeReferenceType()
         {
-            Assert.Throws<ArgumentException>(() => Expression.Constant("hello", typeof(Expression)));
+            Assert.Throws<ArgumentException>(null, () => Expression.Constant("hello", typeof(Expression)));
+        }
+
+        [Fact]
+        public static void NullType()
+        {
+            Assert.Throws<ArgumentNullException>("type", () => Expression.Constant("foo", null));
+        }
+
+        [Fact]
+        public static void ByRefType()
+        {
+            Assert.Throws<ArgumentException>(() => Expression.Constant(null, typeof(string).MakeByRefType()));
+        }
+
+        [Fact]
+        public static void PointerType()
+        {
+            Assert.Throws<ArgumentException>("type", () => Expression.Constant(null, typeof(string).MakePointerType()));
+        }
+
+        [Fact]
+        public static void GenericType()
+        {
+            Assert.Throws<ArgumentException>(() => Expression.Constant(null, typeof(List<>)));
+        }
+
+        [Fact]
+        public static void TypeContainsGenericParameters()
+        {
+            Assert.Throws<ArgumentException>(() => Expression.Constant(null, typeof(List<>.Enumerator)));
+            Assert.Throws<ArgumentException>(() => Expression.Constant(null, typeof(List<>).MakeGenericType(typeof(List<>))));
         }
     }
 }

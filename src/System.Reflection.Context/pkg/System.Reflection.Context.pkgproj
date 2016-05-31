@@ -6,11 +6,12 @@
   <Import Project="$([MSBuild]::GetDirectoryNameOfFileAbove($(MSBuildThisFileDirectory), dir.props))\dir.props" />
   <ItemGroup>
     <ProjectReference Include="..\ref\System.Reflection.Context.csproj">
-      <SupportedFramework>net45;netcore45</SupportedFramework>
+      <SupportedFramework>net45;netcore45;wpa81;netcoreapp1.0</SupportedFramework>
     </ProjectReference>
     <ProjectReference Include="..\src\System.Reflection.Context.builds" />
     <InboxOnTargetFramework Include="net45" />
     <InboxOnTargetFramework Include="win8" />
+    <InboxOnTargetFramework Include="portable-net45+win8" />
   </ItemGroup>
   <Import Project="$([MSBuild]::GetDirectoryNameOfFileAbove($(MSBuildThisFileDirectory), dir.targets))\dir.targets" />
 </Project>

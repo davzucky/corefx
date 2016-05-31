@@ -9,10 +9,11 @@ set(NATIVECOMPRESSION_SOURCES
 add_library(System.IO.Compression.Native
     SHARED
     ${NATIVECOMPRESSION_SOURCES}
+    ${VERSION_FILE_PATH}
 )
 
 target_link_libraries(System.IO.Compression.Native
     ${ZLIB_LIBRARIES}
 )
 
-install (TARGETS System.IO.Compression.Native DESTINATION .)
+install_library_and_symbols (System.IO.Compression.Native)

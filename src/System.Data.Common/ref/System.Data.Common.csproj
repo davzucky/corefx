@@ -2,16 +2,16 @@
 <Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003" DefaultTargets="Build">
   <Import Project="$([MSBuild]::GetDirectoryNameOfFileAbove($(MSBuildThisFileDirectory), dir.props))\dir.props" />
   <PropertyGroup>
-    <AssemblyVersion>4.0.1.0</AssemblyVersion>
+    <AssemblyVersion>4.1.0.0</AssemblyVersion>
     <OutputType>Library</OutputType>
     <NuGetTargetMoniker>.NETStandard,Version=v1.0</NuGetTargetMoniker>
   </PropertyGroup>
   <ItemGroup Condition="'$(PackageTargetFramework)' == ''">
-    <PackageDestination Include="ref/netstandard1.0">
-      <TargetFramework>netstandard1.0</TargetFramework>
+    <PackageDestination Include="ref/netstandard1.2">
+      <TargetFramework>netstandard1.2</TargetFramework>
     </PackageDestination>
-    <PackageDestination Include="ref/portable-net45+win8+wp8+wpa81">
-      <TargetFramework>portable-net45+win8+wp8+wpa81</TargetFramework>
+    <PackageDestination Include="ref/portable-net451+win8+wp8+wpa81">
+      <TargetFramework>portable-net451+win8+wp8+wpa81</TargetFramework>
     </PackageDestination>
   </ItemGroup>
 

@@ -3,6 +3,7 @@
 // See the LICENSE file in the project root for more information.
 
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
 using System.Threading;
@@ -214,7 +215,6 @@ namespace System.Diagnostics.Tests
             Assert.NotNull(_process.MachineName);
         }
 
-        [ActiveIssue(6677, PlatformID.OSX)]
         [Fact]
         public void TestMainModuleOnNonOSX()
         {
@@ -299,7 +299,6 @@ namespace System.Diagnostics.Tests
             }
         }
 
-        [ActiveIssue(6677, PlatformID.OSX)]
         [Fact]
         public void TestModules()
         {
@@ -308,12 +307,12 @@ namespace System.Diagnostics.Tests
             {
                 // Validated that we can get a value for each of the following.
                 Assert.NotNull(pModule);
-                Assert.NotEqual(IntPtr.Zero, pModule.BaseAddress);
                 Assert.NotNull(pModule.FileName);
                 Assert.NotNull(pModule.ModuleName);
 
                 // Just make sure these don't throw
-                IntPtr addr = pModule.EntryPointAddress;
+                IntPtr baseAddr = pModule.BaseAddress;
+                IntPtr entryAddr = pModule.EntryPointAddress;
                 int memSize = pModule.ModuleMemorySize;
             }
         }
@@ -494,7 +493,7 @@ namespace System.Diagnostics.Tests
         [Fact]
         public void TestProcessName()
         {
-            Assert.Equal(_process.ProcessName, HostRunner, StringComparer.OrdinalIgnoreCase);
+            Assert.Equal(Path.GetFileNameWithoutExtension(_process.ProcessName), Path.GetFileNameWithoutExtension(HostRunner), StringComparer.OrdinalIgnoreCase);
         }
 
         [Fact]

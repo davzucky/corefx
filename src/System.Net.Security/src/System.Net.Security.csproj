@@ -13,10 +13,9 @@
     <IsPartialFacadeAssembly Condition="'$(TargetGroup)' == 'net46'">true</IsPartialFacadeAssembly>
     <ResourcesSourceOutputDirectory Condition="'$(TargetGroup)' == 'net46'">None</ResourcesSourceOutputDirectory>
     <PackageTargetFramework Condition="'$(PackageTargetFramework)' == ''">netstandard1.3</PackageTargetFramework>
-    <PackageTargetFramework Condition="'$(TargetsUnix)' == 'true'">netstandard1.4</PackageTargetFramework>
-    <UsePackageTargetRuntimeDefaults Condition="'$(TargetGroup)' == ''">true</UsePackageTargetRuntimeDefaults>
+    <PackageTargetFramework Condition="'$(TargetsUnix)' == 'true'">netstandard1.6</PackageTargetFramework>
     <NuGetTargetMoniker Condition="'$(TargetGroup)' == ''">.NETStandard,Version=v1.3</NuGetTargetMoniker>
-    <NuGetTargetMoniker Condition="'$(TargetsUnix)' == 'true'">.NETStandard,Version=v1.4</NuGetTargetMoniker>
+    <NuGetTargetMoniker Condition="'$(TargetsUnix)' == 'true'">.NETStandard,Version=v1.6</NuGetTargetMoniker>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(TargetsWindows)' == 'true' and '$(ProjectJson)' == '' ">
     <ProjectJson>win/project.json</ProjectJson>
@@ -139,8 +138,11 @@
     <Compile Include="$(CommonPath)\Microsoft\Win32\SafeHandles\SafeHandleZeroOrMinusOneIsInvalid.cs">
       <Link>Common\Microsoft\Win32\SafeHandles\SafeHandleZeroOrMinusOneIsInvalid.cs</Link>
     </Compile>
-    <Compile Include="$(CommonPath)\System\IO\StreamAsyncHelper.cs">
-      <Link>Common\System\IO\StreamAsyncHelper.cs</Link>
+    <Compile Include="$(CommonPath)\System\IO\StreamApmExtensions.cs">
+      <Link>Common\System\IO\StreamApmExtensions.cs</Link>
+    </Compile>
+    <Compile Include="$(CommonPath)\System\Threading\Tasks\TaskToApm.cs">
+      <Link>Common\System\Threading\Tasks\TaskToApm.cs</Link>
     </Compile>
     <Compile Include="$(CommonPath)\System\IO\Error.cs">
       <Link>Common\System\IO\Error.cs</Link>
@@ -256,21 +258,6 @@
     <Compile Include="$(CommonPath)\Interop\Unix\Interop.Errors.cs">
       <Link>Common\Interop\Unix\Interop.Errors.cs</Link>
     </Compile>
-    <Compile Include="$(CommonPath)\Interop\Unix\libssl\SecuritySafeHandles.cs">
-      <Link>Common\Interop\Unix\libssl\SecuritySafeHandles.cs</Link>
-    </Compile>
-    <Compile Include="$(CommonPath)\Interop\Unix\libssl\StreamSizes.cs">
-      <Link>Common\Interop\Unix\libssl\StreamSizes.cs</Link>
-    </Compile>
-    <Compile Include="$(CommonPath)\Interop\Unix\libssl\SslConnectionInfo.cs">
-      <Link>Common\Interop\Unix\libssl\SslConnectionInfo.cs</Link>
-    </Compile>
-    <Compile Include="$(CommonPath)\Interop\Unix\libssl\Interop.OpenSsl.cs">
-      <Link>Common\Interop\Unix\libssl\Interop.OpenSsl.cs</Link>
-    </Compile>
-    <Compile Include="$(CommonPath)\Interop\Unix\libssl\Interop.X509ChannelBindingHash.cs">
-      <Link>Common\Interop\Unix\libssl\Interop.X509ChannelBindingHash.cs</Link>
-    </Compile>
     <Compile Include="$(CommonPath)\Interop\Unix\System.Security.Cryptography.Native\Interop.ASN1.cs">
       <Link>Common\Interop\Unix\System.Security.Cryptography.Native\Interop.ASN1.cs</Link>
     </Compile>
@@ -285,6 +272,9 @@
     </Compile>
     <Compile Include="$(CommonPath)\Interop\Unix\System.Security.Cryptography.Native\Interop.Crypto.cs">
       <Link>Common\Interop\Unix\System.Security.Cryptography.Native\Interop.Crypto.cs</Link>
+    </Compile>
+    <Compile Include="$(CommonPath)\Interop\Unix\System.Security.Cryptography.Native\Interop.OpenSsl.cs">
+      <Link>Common\Interop\Unix\System.Security.Cryptography.Native\Interop.OpenSsl.cs</Link>
     </Compile>
     <Compile Include="$(CommonPath)\Interop\Unix\System.Security.Cryptography.Native\Interop.Ssl.cs">
       <Link>Common\Interop\Unix\System.Security.Cryptography.Native\Interop.Ssl.cs</Link>
@@ -301,6 +291,9 @@
     <Compile Include="$(CommonPath)\Interop\Unix\System.Security.Cryptography.Native\Interop.X509.cs">
       <Link>Common\Interop\Unix\System.Security.Cryptography.Native\Interop.X509.cs</Link>
     </Compile>
+    <Compile Include="$(CommonPath)\Interop\Unix\System.Security.Cryptography.Native\Interop.X509ChannelBindingHash.cs">
+      <Link>Common\Interop\Unix\System.Security.Cryptography.Native\Interop.X509ChannelBindingHash.cs</Link>
+    </Compile>
     <Compile Include="$(CommonPath)\Interop\Unix\System.Security.Cryptography.Native\Interop.X509Name.cs">
       <Link>Common\Interop\Unix\System.Security.Cryptography.Native\Interop.X509Name.cs</Link>
     </Compile>
@@ -313,20 +306,20 @@
     <Compile Include="$(CommonPath)\Interop\Unix\System.Security.Cryptography.Native\Interop.X509StoreCtx.cs">
       <Link>Common\Interop\Unix\System.Security.Cryptography.Native\Interop.X509StoreCtx.cs</Link>
     </Compile>
+    <Compile Include="$(CommonPath)\Interop\Unix\System.Security.Cryptography.Native\SslConnectionInfo.cs">
+      <Link>Common\Interop\Unix\System.Security.Cryptography.Native\SslConnectionInfo.cs</Link>
+    </Compile>
+    <Compile Include="$(CommonPath)\Interop\Unix\System.Security.Cryptography.Native\StreamSizes.cs">
+      <Link>Common\Interop\Unix\System.Security.Cryptography.Native\StreamSizes.cs</Link>
+    </Compile>
     <Compile Include="$(CommonPath)\Interop\Unix\System.Net.Security.Native\Interop.Initialization.cs">
       <Link>Common\Interop\Unix\System.Net.Security.Native\Interop.Initialization.cs</Link>
-    </Compile>
-    <Compile Include="$(CommonPath)\Interop\Unix\System.Net.Security.Native\Interop.GssApi.cs">
-      <Link>Common\Interop\Unix\System.Net.Security.Native\Interop.GssApi.cs</Link>
     </Compile>
     <Compile Include="$(CommonPath)\Interop\Unix\System.Net.Security.Native\Interop.GssApiException.cs">
       <Link>Common\Interop\Unix\System.Net.Security.Native\Interop.GssApiException.cs</Link>
     </Compile>
     <Compile Include="$(CommonPath)\Interop\Unix\System.Net.Security.Native\Interop.GssBuffer.cs">
       <Link>Common\Interop\Unix\System.Net.Security.Native\Interop.GssBuffer.cs</Link>
-    </Compile>
-    <Compile Include="$(CommonPath)\Interop\Unix\System.Net.Security.Native\SecuritySafeHandles.cs">
-       <Link>Common\Interop\Unix\System.Net.Security.Native\SecuritySafeHandles.cs</Link>
     </Compile>
     <Compile Include="$(CommonPath)\Microsoft\Win32\SafeHandles\GssSafeHandles.cs">
        <Link>Common\Microsoft\Win32\SafeHandles\GssSafeHandles.cs</Link>
@@ -354,6 +347,30 @@
     </Compile>
     <Compile Include="$(CommonPath)\System\Net\ContextAwareResult.Unix.cs">
       <Link>Common\System\Net\ContextAwareResult.Unix.cs</Link>
+    </Compile>
+    <Compile Include="$(CommonPath)\System\Net\Security\Unix\SafeDeleteContext.cs">
+      <Link>Common\System\Net\Security\Unix\SafeDeleteContext.cs</Link>
+    </Compile>
+    <Compile Include="$(CommonPath)\System\Net\Security\Unix\SafeDeleteSslContext.cs">
+      <Link>Common\System\Net\Security\Unix\SafeDeleteSslContext.cs</Link>
+    </Compile>
+    <Compile Include="$(CommonPath)\System\Net\Security\Unix\SafeDeleteNegoContext.cs">
+       <Link>Common\System\Net\Security\Unix\SafeDeleteNegoContext.cs</Link>
+    </Compile>
+    <Compile Include="$(CommonPath)\System\Net\Security\Unix\SafeFreeCertContext.cs">
+      <Link>Common\System\Net\Security\Unix\SafeFreeCertContext.cs</Link>
+    </Compile>
+    <Compile Include="$(CommonPath)\System\Net\Security\Unix\SafeFreeContextBufferChannelBinding.cs">
+      <Link>Common\System\Net\Security\Unix\SafeFreeContextBufferChannelBinding.cs</Link>
+    </Compile>
+    <Compile Include="$(CommonPath)\System\Net\Security\Unix\SafeFreeCredentials.cs">
+      <Link>Common\System\Net\Security\Unix\SafeFreeCredentials.cs</Link>
+    </Compile>
+    <Compile Include="$(CommonPath)\System\Net\Security\Unix\SafeFreeNegoCredentials.cs">
+       <Link>Common\System\Net\Security\Unix\SafeFreeNegoCredentials.cs</Link>
+    </Compile>
+    <Compile Include="$(CommonPath)\System\Net\Security\Unix\SafeFreeSslCredentials.cs">
+      <Link>Common\System\Net\Security\Unix\SafeFreeSslCredentials.cs</Link>
     </Compile>
   </ItemGroup>
 
