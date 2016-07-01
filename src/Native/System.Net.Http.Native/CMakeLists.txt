@@ -1,5 +1,6 @@
 project(System.Net.Http.Native)
 
+<<<<<<< Updated upstream
 set(CMAKE_LIBRARY_PATH ${CMAKE_LIBRARY_PATH}
 	/usr/lib/x86_64-linux-gnu
 	/usr/lib
@@ -18,6 +19,21 @@ if(CMAKE_STATIC_CURL)
 	set(CURL_LIBRARIES ${CURL_STATIC_LIB})
 	add_compile_options(-DCURL_STATICLIB)
 endif(CMAKE_STATIC_CURL)
+=======
+if(CMAKE_STATIC_LIB_LINK)
+   set(CMAKE_FIND_LIBRARY_SUFFIXES .a)
+   add_definitions(-DCURL_STATICLIB)
+   set(CMAKE_EXE_LINKER_FLAGS "-static -static-libgcc -static-libstdc++")
+endif(CMAKE_STATIC_LIB_LINK)
+>>>>>>> Stashed changes
+
+find_package(CURL REQUIRED)
+#    find_library(CURL_STATIC_LIB NAMES libcurl.a)
+#    if(NOT CURL_STATIC_LIB)
+#        message(FATAL_ERROR "!!! Cannot find libcurl static lib and System.Net.Http.Native cannot build without it. Try installing libcurl4-openssl-dev (or the appropriate package for your platform) !!!")
+#    endif(NOT CURL_STATIC_LIB)
+#    set(CURL_LIBRARIES ${CURL_STATIC_LIB})
+#    add_compile_options(-DCURL_STATICLIB)
 
 
 set(NATIVEHTTP_SOURCES
@@ -28,6 +44,8 @@ set(NATIVEHTTP_SOURCES
     pal_versioninfo.cpp
 )
 
+message("Curl Library :  ${CURL_LIBRARIES}")
+message("Curl incluse :  ${CURL_INCLUDE_DIR}")
 include_directories(SYSTEM ${CURL_INCLUDE_DIR})
 
 add_library(System.Net.Http.Native
@@ -36,7 +54,11 @@ add_library(System.Net.Http.Native
     ${VERSION_FILE_PATH}
 )
 
+<<<<<<< Updated upstream
 MESSAGE("CURL_LIBRARIES :" ${CURL_LIBRARIES})
+=======
+
+>>>>>>> Stashed changes
 target_link_libraries(System.Net.Http.Native
   ${CURL_LIBRARIES}
 )
