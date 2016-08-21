@@ -583,9 +583,9 @@ namespace System.Linq.Expressions.Interpreter
             }
 
             // indexes, byref args not allowed.
-            foreach (var arg in index.Arguments)
+            for (int i = 0, n = index.ArgumentCount; i < n; i++)
             {
-                Compile(arg);
+                Compile(index.GetArgument(i));
             }
 
             EmitIndexGet(index);
@@ -597,7 +597,7 @@ namespace System.Linq.Expressions.Interpreter
             {
                 _instructions.EmitCall(index.Indexer.GetGetMethod(true));
             }
-            else if (index.Arguments.Count != 1)
+            else if (index.ArgumentCount != 1)
             {
                 _instructions.EmitCall(index.Object.Type.GetMethod("Get", BindingFlags.Public | BindingFlags.Instance));
             }
@@ -618,9 +618,9 @@ namespace System.Linq.Expressions.Interpreter
             }
 
             // indexes, byref args not allowed.
-            foreach (var arg in index.Arguments)
+            for (int i = 0, n = index.ArgumentCount; i < n; i++)
             {
-                Compile(arg);
+                Compile(index.GetArgument(i));
             }
 
             // value:
@@ -636,7 +636,7 @@ namespace System.Linq.Expressions.Interpreter
             {
                 _instructions.EmitCall(index.Indexer.GetSetMethod(true));
             }
-            else if (index.Arguments.Count != 1)
+            else if (index.ArgumentCount != 1)
             {
                 _instructions.EmitCall(index.Object.Type.GetMethod("Set", BindingFlags.Public | BindingFlags.Instance));
             }
@@ -661,15 +661,20 @@ namespace System.Linq.Expressions.Interpreter
                 EmitThisForMethodCall(expr);
             }
 
-            CompileMemberAssignment(asVoid, member.Member, node.Right);
+            CompileMemberAssignment(asVoid, member.Member, node.Right, false);
         }
 
-        private void CompileMemberAssignment(bool asVoid, MemberInfo refMember, Expression value)
+        private void CompileMemberAssignment(bool asVoid, MemberInfo refMember, Expression value, bool forBinding)
         {
             PropertyInfo pi = refMember as PropertyInfo;
             if (pi != null)
             {
                 var method = pi.GetSetMethod(true);
+                if (forBinding && method.IsStatic)
+                {
+                    throw Error.InvalidProgram();
+                }
+
                 EmitThisForMethodCall(value);
 
                 int start = _instructions.Count;
@@ -685,29 +690,36 @@ namespace System.Linq.Expressions.Interpreter
                 {
                     _instructions.EmitCall(method);
                 }
-                return;
             }
             else
             {
                 // other types inherited from MemberInfo (EventInfo\MethodBase\Type) cannot be used in MemberAssignment
                 FieldInfo fi = (FieldInfo)refMember;
-                if (fi != null)
+                Debug.Assert(fi != null);
+                if (fi.IsLiteral)
                 {
-                    EmitThisForMethodCall(value);
+                    throw Error.NotSupported();
+                }
 
-                    int start = _instructions.Count;
-                    if (!asVoid)
-                    {
-                        LocalDefinition local = _locals.DefineLocal(Expression.Parameter(value.Type), start);
-                        _instructions.EmitAssignLocal(local.Index);
-                        _instructions.EmitStoreField(fi);
-                        _instructions.EmitLoadLocal(local.Index);
-                        _locals.UndefineLocal(local, _instructions.Count);
-                    }
-                    else
-                    {
-                        _instructions.EmitStoreField(fi);
-                    }
+                if (forBinding && fi.IsStatic)
+                {
+                    _instructions.UnEmit(); // Undo having pushed the instance to the stack.
+                }
+
+                EmitThisForMethodCall(value);
+
+                int start = _instructions.Count;
+                if (!asVoid)
+                {
+                    LocalDefinition local = _locals.DefineLocal(Expression.Parameter(value.Type), start);
+                    _instructions.EmitAssignLocal(local.Index);
+                    _instructions.EmitStoreField(fi);
+                    _instructions.EmitLoadLocal(local.Index);
+                    _locals.UndefineLocal(local, _instructions.Count);
+                }
+                else
+                {
+                    _instructions.EmitStoreField(fi);
                 }
             }
         }
@@ -2109,25 +2121,29 @@ namespace System.Linq.Expressions.Interpreter
         private void CompileMethodCallExpression(Expression expr)
         {
             var node = (MethodCallExpression)expr;
+            CompileMethodCallExpression(node.Object, node.Method, node);
+        }
 
-            var parameters = node.Method.GetParameters();
+        private void CompileMethodCallExpression(Expression @object, MethodInfo method, IArgumentProvider arguments)
+        {
+            var parameters = method.GetParameters();
 
             // TODO: Support pass by reference.
             List<ByRefUpdater> updaters = null;
-            if (!node.Method.IsStatic)
+            if (!method.IsStatic)
             {
-                var updater = CompileAddress(node.Object, -1);
+                var updater = CompileAddress(@object, -1);
                 if (updater != null)
                 {
                     updaters = new List<ByRefUpdater>() { updater };
                 }
             }
 
-            Debug.Assert(parameters.Length == node.Arguments.Count);
+            Debug.Assert(parameters.Length == arguments.ArgumentCount);
 
-            for (int i = 0; i < node.Arguments.Count; i++)
+            for (int i = 0, n = arguments.ArgumentCount; i < n; i++)
             {
-                var arg = node.Arguments[i];
+                var arg = arguments.GetArgument(i);
 
                 // byref calls leave out values on the stack, we use a callback
                 // to emit the code which processes each value left on the stack.
@@ -2150,22 +2166,22 @@ namespace System.Linq.Expressions.Interpreter
                 }
             }
 
-            if (!node.Method.IsStatic &&
-                node.Object.Type.IsNullableType())
+            if (!method.IsStatic &&
+                @object.Type.IsNullableType())
             {
                 // reflection doesn't let us call methods on Nullable<T> when the value
                 // is null...  so we get to special case those methods!
-                _instructions.EmitNullableCall(node.Method, parameters);
+                _instructions.EmitNullableCall(method, parameters);
             }
             else
             {
                 if (updaters == null)
                 {
-                    _instructions.EmitCall(node.Method, parameters);
+                    _instructions.EmitCall(method, parameters);
                 }
                 else
                 {
-                    _instructions.EmitByRefCall(node.Method, parameters, updaters.ToArray());
+                    _instructions.EmitByRefCall(method, parameters, updaters.ToArray());
 
                     foreach (var updater in updaters)
                     {
@@ -2252,11 +2268,12 @@ namespace System.Linq.Expressions.Interpreter
                             }
 
                             List<LocalDefinition> indexLocals = new List<LocalDefinition>();
-                            for (int i = 0; i < indexNode.Arguments.Count; i++)
+                            for (int i = 0; i < indexNode.ArgumentCount; i++)
                             {
-                                Compile(indexNode.Arguments[i]);
+                                var arg = indexNode.GetArgument(i);
+                                Compile(arg);
 
-                                var argTmp = _locals.DefineLocal(Expression.Parameter(indexNode.Arguments[i].Type), _instructions.Count);
+                                var argTmp = _locals.DefineLocal(Expression.Parameter(arg.Type), _instructions.Count);
                                 _instructions.EmitDup();
                                 _instructions.EmitStoreLocal(argTmp.Index);
 
@@ -2267,13 +2284,13 @@ namespace System.Linq.Expressions.Interpreter
 
                             return new IndexMethodByRefUpdater(objTmp, indexLocals.ToArray(), indexNode.Indexer.GetSetMethod(), index);
                         }
-                        else if (indexNode.Arguments.Count == 1)
+                        else if (indexNode.ArgumentCount == 1)
                         {
-                            return CompileArrayIndexAddress(indexNode.Object, indexNode.Arguments[0], index);
+                            return CompileArrayIndexAddress(indexNode.Object, indexNode.GetArgument(0), index);
                         }
                         else
                         {
-                            return CompileMultiDimArrayAccess(indexNode.Object, indexNode.Arguments, index);
+                            return CompileMultiDimArrayAccess(indexNode.Object, indexNode, index);
                         }
                     case ExpressionType.MemberAccess:
                         var member = (MemberExpression)node;
@@ -2318,7 +2335,7 @@ namespace System.Linq.Expressions.Interpreter
                         {
                             return CompileMultiDimArrayAccess(
                                 call.Object,
-                                call.Arguments,
+                                call,
                                 index
                             );
                         }
@@ -2330,7 +2347,7 @@ namespace System.Linq.Expressions.Interpreter
             return null;
         }
 
-        private ByRefUpdater CompileMultiDimArrayAccess(Expression array, IList<Expression> arguments, int index)
+        private ByRefUpdater CompileMultiDimArrayAccess(Expression array, IArgumentProvider arguments, int index)
         {
             Compile(array);
             LocalDefinition objTmp = _locals.DefineLocal(Expression.Parameter(array.Type), _instructions.Count);
@@ -2338,11 +2355,12 @@ namespace System.Linq.Expressions.Interpreter
             _instructions.EmitStoreLocal(objTmp.Index);
 
             List<LocalDefinition> indexLocals = new List<LocalDefinition>();
-            for (int i = 0; i < arguments.Count; i++)
+            for (int i = 0; i < arguments.ArgumentCount; i++)
             {
-                Compile(arguments[i]);
+                var arg = arguments.GetArgument(i);
+                Compile(arg);
 
-                var argTmp = _locals.DefineLocal(Expression.Parameter(arguments[i].Type), _instructions.Count);
+                var argTmp = _locals.DefineLocal(Expression.Parameter(arg.Type), _instructions.Count);
                 _instructions.EmitDup();
                 _instructions.EmitStoreLocal(argTmp.Index);
 
@@ -2368,9 +2386,11 @@ namespace System.Linq.Expressions.Interpreter
 
                 for (int i = 0; i < parameters.Length; i++)
                 {
+                    var arg = node.GetArgument(i);
+
                     if (parameters[i].ParameterType.IsByRef)
                     {
-                        var updater = CompileAddress(node.Arguments[i], i);
+                        var updater = CompileAddress(arg, i);
                         if (updater != null)
                         {
                             if (updaters == null)
@@ -2382,17 +2402,17 @@ namespace System.Linq.Expressions.Interpreter
                     }
                     else
                     {
-                        Compile(node.Arguments[i]);
+                        Compile(arg);
                     }
                 }
 
                 if (updaters != null)
                 {
-                    _instructions.EmitByRefNew(node.Constructor, updaters.ToArray());
+                    _instructions.EmitByRefNew(node.Constructor, parameters, updaters.ToArray());
                 }
                 else
                 {
-                    _instructions.EmitNew(node.Constructor);
+                    _instructions.EmitNew(node.Constructor, parameters);
                 }
             }
             else
@@ -2406,20 +2426,26 @@ namespace System.Linq.Expressions.Interpreter
         {
             var node = (MemberExpression)expr;
 
-            CompileMember(node.Expression, node.Member);
+            CompileMember(node.Expression, node.Member, false);
         }
 
-        private void CompileMember(Expression from, MemberInfo member)
+        private void CompileMember(Expression from, MemberInfo member, bool forBinding)
         {
             FieldInfo fi = member as FieldInfo;
             if (fi != null)
             {
                 if (fi.IsLiteral)
                 {
+                    Debug.Assert(!forBinding);
                     _instructions.EmitLoad(fi.GetValue(null), fi.FieldType);
                 }
                 else if (fi.IsStatic)
                 {
+                    if (forBinding)
+                    {
+                        throw Error.InvalidProgram();
+                    }
+
                     if (fi.IsInitOnly)
                     {
                         _instructions.EmitLoad(fi.GetValue(null), fi.FieldType);
@@ -2435,6 +2461,7 @@ namespace System.Linq.Expressions.Interpreter
                     {
                         EmitThisForMethodCall(from);
                     }
+
                     _instructions.EmitLoadField(fi);
                 }
             }
@@ -2445,6 +2472,11 @@ namespace System.Linq.Expressions.Interpreter
                 if (pi != null)
                 {
                     var method = pi.GetGetMethod(true);
+                    if (forBinding && method.IsStatic)
+                    {
+                        throw Error.InvalidProgram();
+                    }
+
                     if (from != null)
                     {
                         EmitThisForMethodCall(from);
@@ -2587,19 +2619,17 @@ namespace System.Linq.Expressions.Interpreter
                 var compMethod = node.Expression.Type.GetMethod("Compile", Array.Empty<Type>());
                 CompileMethodCallExpression(
                     Expression.Call(
-                        Expression.Call(
-                            node.Expression,
-                            compMethod
-                        ),
-                        compMethod.ReturnType.GetMethod("Invoke"),
-                        node.Arguments
-                    )
+                        node.Expression,
+                        compMethod
+                    ),
+                    compMethod.ReturnType.GetMethod("Invoke"),
+                    node
                 );
             }
             else
             {
                 CompileMethodCallExpression(
-                    Expression.Call(node.Expression, node.Expression.Type.GetMethod("Invoke"), node.Arguments)
+                    node.Expression, node.Expression.Type.GetMethod("Invoke"), node
                 );
             }
         }
@@ -2648,13 +2678,14 @@ namespace System.Linq.Expressions.Interpreter
                         CompileMemberAssignment(
                             true,
                             ((MemberAssignment)binding).Member,
-                            ((MemberAssignment)binding).Expression
+                            ((MemberAssignment)binding).Expression,
+                            true
                         );
                         break;
                     case MemberBindingType.ListBinding:
                         var memberList = (MemberListBinding)binding;
                         _instructions.EmitDup();
-                        CompileMember(null, memberList.Member);
+                        CompileMember(null, memberList.Member, true);
                         CompileListInit(memberList.Initializers);
                         _instructions.EmitPop();
                         break;
@@ -2667,7 +2698,7 @@ namespace System.Linq.Expressions.Interpreter
                             throw Error.CannotAutoInitializeValueTypeMemberThroughProperty(memberMember.Bindings);
                         }
 
-                        CompileMember(null, memberMember.Member);
+                        CompileMember(null, memberMember.Member, true);
                         CompileMemberInit(memberMember.Bindings);
                         _instructions.EmitPop();
                         break;

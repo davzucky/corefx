@@ -5,6 +5,7 @@
 using System.Collections.Immutable;
 using System.Diagnostics;
 using System.IO;
+using System.IO.Compression;
 using System.Reflection.Internal;
 using System.Reflection.Metadata;
 using System.Threading;
@@ -20,6 +21,11 @@ namespace System.Reflection.PortableExecutable
     /// </remarks>
     public sealed class PEReader : IDisposable
     {
+        /// <summary>
+        /// True if the PE image has been loaded into memory by the OS loader.
+        /// </summary>
+        public bool IsLoadedImage { get; }
+
         // May be null in the event that the entire image is not
         // deemed necessary and we have been instructed to read
         // the image contents without being lazy.
@@ -45,6 +51,24 @@ namespace System.Reflection.PortableExecutable
         /// The content of the image is not read during the construction of the <see cref="PEReader"/>
         /// </remarks>
         public unsafe PEReader(byte* peImage, int size)
+            : this(peImage, size, isLoadedImage: false)
+        {
+        }
+
+        /// <summary>
+        /// Creates a Portable Executable reader over a PE image stored in memory.
+        /// </summary>
+        /// <param name="peImage">Pointer to the start of the PE image.</param>
+        /// <param name="size">The size of the PE image.</param>
+        /// <param name="isLoadedImage">True if the PE image has been loaded into memory by the OS loader.</param>
+        /// <exception cref="ArgumentNullException"><paramref name="peImage"/> is <see cref="IntPtr.Zero"/>.</exception>
+        /// <exception cref="ArgumentOutOfRangeException"><paramref name="size"/> is negative.</exception>
+        /// <remarks>
+        /// The memory is owned by the caller and not released on disposal of the <see cref="PEReader"/>.
+        /// The caller is responsible for keeping the memory alive and unmodified throughout the lifetime of the <see cref="PEReader"/>.
+        /// The content of the image is not read during the construction of the <see cref="PEReader"/>
+        /// </remarks>
+        public unsafe PEReader(byte* peImage, int size, bool isLoadedImage)
         {
             if (peImage == null)
             {
@@ -57,6 +81,7 @@ namespace System.Reflection.PortableExecutable
             }
 
             _peImage = new ExternalMemoryBlockProvider(peImage, size);
+            IsLoadedImage = isLoadedImage;
         }
 
         /// <summary>
@@ -94,9 +119,8 @@ namespace System.Reflection.PortableExecutable
         /// </param>
         /// <exception cref="ArgumentNullException"><paramref name="peStream"/> is null.</exception>
         /// <exception cref="ArgumentOutOfRangeException"><paramref name="options"/> has an invalid value.</exception>
-        /// <exception cref="BadImageFormatException">
-        /// <see cref="PEStreamOptions.PrefetchMetadata"/> is specified and the PE headers of the image are invalid.
-        /// </exception>
+        /// <exception cref="IOException">Error reading from the stream (only when prefetching data).</exception>
+        /// <exception cref="BadImageFormatException"><see cref="PEStreamOptions.PrefetchMetadata"/> is specified and the PE headers of the image are invalid.</exception>
         public PEReader(Stream peStream, PEStreamOptions options)
             : this(peStream, options, 0)
         {
@@ -124,6 +148,7 @@ namespace System.Reflection.PortableExecutable
         /// </param>
         /// <exception cref="ArgumentOutOfRangeException">Size is negative or extends past the end of the stream.</exception>
         /// <exception cref="IOException">Error reading from the stream (only when prefetching data).</exception>
+        /// <exception cref="BadImageFormatException"><see cref="PEStreamOptions.PrefetchMetadata"/> is specified and the PE headers of the image are invalid.</exception>
         public unsafe PEReader(Stream peStream, PEStreamOptions options, int size)
         {
             if (peStream == null)
@@ -140,6 +165,8 @@ namespace System.Reflection.PortableExecutable
             {
                 throw new ArgumentOutOfRangeException(nameof(options));
             }
+
+            IsLoadedImage = (options & PEStreamOptions.IsLoadedImage) != 0;
 
             long start = peStream.Position;
             int actualSize = StreamExtensions.GetAndValidateSize(peStream, size, nameof(peStream));
@@ -267,23 +294,23 @@ namespace System.Reflection.PortableExecutable
             {
                 lock (constraints.GuardOpt)
                 {
-                    headers = ReadPEHeadersNoLock(stream, constraints.ImageStart, constraints.ImageSize);
+                    headers = ReadPEHeadersNoLock(stream, constraints.ImageStart, constraints.ImageSize, IsLoadedImage);
                 }
             }
             else
             {
-                headers = ReadPEHeadersNoLock(stream, constraints.ImageStart, constraints.ImageSize);
+                headers = ReadPEHeadersNoLock(stream, constraints.ImageStart, constraints.ImageSize, IsLoadedImage);
             }
 
             Interlocked.CompareExchange(ref _lazyPEHeaders, headers, null);
         }
 
         /// <exception cref="IOException">Error reading from the stream.</exception>
-        private static PEHeaders ReadPEHeadersNoLock(Stream stream, long imageStartPosition, int imageSize)
+        private static PEHeaders ReadPEHeadersNoLock(Stream stream, long imageStartPosition, int imageSize, bool isLoadedImage)
         {
             Debug.Assert(imageStartPosition >= 0 && imageStartPosition <= stream.Length);
             stream.Seek(imageStartPosition, SeekOrigin.Begin);
-            return new PEHeaders(stream, imageSize);
+            return new PEHeaders(stream, imageSize, isLoadedImage);
         }
 
         /// <summary>
@@ -334,8 +361,14 @@ namespace System.Reflection.PortableExecutable
         }
 
         /// <exception cref="IOException">IO error while reading from the underlying stream.</exception>
+        /// <exception cref="InvalidOperationException">PE image not available.</exception>
         private AbstractMemoryBlock GetPESectionBlock(int index)
         {
+            if (_peImage == null)
+            {
+                throw new InvalidOperationException(SR.PEImageNotAvailable);
+            }
+
             Debug.Assert(index >= 0 && index < PEHeaders.SectionHeaders.Length);
             Debug.Assert(_peImage != null);
 
@@ -344,9 +377,30 @@ namespace System.Reflection.PortableExecutable
                 Interlocked.CompareExchange(ref _lazyPESectionBlocks, new AbstractMemoryBlock[PEHeaders.SectionHeaders.Length], null);
             }
 
-            var newBlock = _peImage.GetMemoryBlock(
-                PEHeaders.SectionHeaders[index].PointerToRawData,
-                PEHeaders.SectionHeaders[index].SizeOfRawData);
+            AbstractMemoryBlock newBlock;
+            if (IsLoadedImage)
+            {
+                newBlock = _peImage.GetMemoryBlock(
+                    PEHeaders.SectionHeaders[index].VirtualAddress,
+                    PEHeaders.SectionHeaders[index].VirtualSize);
+            }
+            else
+            {
+                // Virtual size can be smaller than size in the image 
+                // since the size in the image is aligned. 
+                // Trim the alignment.
+                // 
+                // Virtual size can also be larger than size in the image.
+                // When loaded sizeInImage bytes are mapped from the image 
+                // and the rest of the bytes are zeroed out.
+                // Only return data stored in the image.
+
+                int size = Math.Min(
+                    PEHeaders.SectionHeaders[index].VirtualSize,
+                    PEHeaders.SectionHeaders[index].SizeOfRawData);
+
+                newBlock = _peImage.GetMemoryBlock(PEHeaders.SectionHeaders[index].PointerToRawData, size);
+            }
 
             if (Interlocked.CompareExchange(ref _lazyPESectionBlocks[index], newBlock, null) != null)
             {
@@ -408,29 +462,55 @@ namespace System.Reflection.PortableExecutable
         /// </returns>
         /// <exception cref="BadImageFormatException">The PE headers contain invalid data.</exception>
         /// <exception cref="IOException">IO error while reading from the underlying stream.</exception>
+        /// <exception cref="InvalidOperationException">PE image not available.</exception>
+        /// <exception cref="ArgumentOutOfRangeException"><paramref name="relativeVirtualAddress"/> is negative.</exception>
         public PEMemoryBlock GetSectionData(int relativeVirtualAddress)
         {
-            var sectionIndex = PEHeaders.GetContainingSectionIndex(relativeVirtualAddress);
+            if (relativeVirtualAddress < 0)
+            {
+                Throw.ArgumentOutOfRange(nameof(relativeVirtualAddress));
+            }
+
+            int sectionIndex = PEHeaders.GetContainingSectionIndex(relativeVirtualAddress);
             if (sectionIndex < 0)
             {
                 return default(PEMemoryBlock);
             }
 
-            int relativeOffset = relativeVirtualAddress - PEHeaders.SectionHeaders[sectionIndex].VirtualAddress;
-            int size = PEHeaders.SectionHeaders[sectionIndex].VirtualSize - relativeOffset;
+            var block = GetPESectionBlock(sectionIndex);
 
-            AbstractMemoryBlock block;
-            if (_peImage != null)
+            int relativeOffset = relativeVirtualAddress - PEHeaders.SectionHeaders[sectionIndex].VirtualAddress;
+            if (relativeOffset > block.Size)
             {
-                block = GetPESectionBlock(sectionIndex);
-            }
-            else
-            {
-                block = GetEntireImageBlock();
-                relativeOffset += PEHeaders.SectionHeaders[sectionIndex].PointerToRawData;
+                return default(PEMemoryBlock);
             }
 
             return new PEMemoryBlock(block, relativeOffset);
+        }
+
+        /// <summary>
+        /// Loads PE section of the specified name into memory and returns a memory block that spans the section.
+        /// </summary>
+        /// <param name="sectionName">Name of the section.</param>
+        /// <returns>
+        /// An empty block if no section of the given <paramref name="sectionName"/> exists in this PE image.
+        /// </returns>
+        /// <exception cref="ArgumentNullException"><paramref name="sectionName"/> is null.</exception>
+        /// <exception cref="InvalidOperationException">PE image not available.</exception>
+        public PEMemoryBlock GetSectionData(string sectionName)
+        {
+            if (sectionName == null)
+            {
+                Throw.ArgumentNull(nameof(sectionName));
+            }
+
+            int sectionIndex = PEHeaders.IndexOfSection(sectionName);
+            if (sectionIndex < 0)
+            {
+                return default(PEMemoryBlock);
+            }
+
+            return new PEMemoryBlock(GetPESectionBlock(sectionIndex));
         }
 
         /// <summary>
@@ -493,6 +573,12 @@ namespace System.Reflection.PortableExecutable
             return builder.MoveToImmutable();
         }
 
+        private AbstractMemoryBlock GetDebugDirectoryEntryDataBlock(DebugDirectoryEntry entry)
+        {
+            int dataOffset = IsLoadedImage ? entry.DataRelativeVirtualAddress : entry.DataPointer;
+            return _peImage.GetMemoryBlock(dataOffset, entry.DataSize);
+        }
+
         /// <summary>
         /// Reads the data pointed to by the specified Debug Directory entry and interprets them as CodeView.
         /// </summary>
@@ -506,7 +592,7 @@ namespace System.Reflection.PortableExecutable
                 throw new ArgumentException(SR.NotCodeViewEntry, nameof(entry));
             }
 
-            using (AbstractMemoryBlock block = _peImage.GetMemoryBlock(entry.DataPointer, entry.DataSize))
+            using (var block = GetDebugDirectoryEntryDataBlock(entry))
             {
                 var reader = new BlobReader(block.Pointer, block.Size);
 
@@ -533,6 +619,109 @@ namespace System.Reflection.PortableExecutable
 
                 return new CodeViewDebugDirectoryData(guid, age, path);
             }
+        }
+
+        /// <summary>
+        /// Reads the data pointed to by the specified Debug Directory entry and interprets them as Embedded Portable PDB blob.
+        /// </summary>
+        /// <returns>
+        /// Provider of a metadata reader reading Portable PDB image.
+        /// </returns>
+        /// <exception cref="ArgumentException"><paramref name="entry"/> is not a <see cref="DebugDirectoryEntryType.EmbeddedPortablePdb"/> entry.</exception>
+        /// <exception cref="BadImageFormatException">Bad format of the data.</exception>
+        public unsafe MetadataReaderProvider ReadEmbeddedPortablePdbDebugDirectoryData(DebugDirectoryEntry entry)
+        {
+            if (entry.Type != DebugDirectoryEntryType.EmbeddedPortablePdb)
+            {
+                throw new ArgumentException(SR.NotCodeViewEntry, nameof(entry));
+            }
+
+            ValidateEmbeddedPortablePdbVersion(entry);
+
+            using (var block = GetDebugDirectoryEntryDataBlock(entry))
+            {
+                var pdbImage = DecodeEmbeddedPortablePdbDebugDirectoryData(block);
+                return MetadataReaderProvider.FromPortablePdbImage(pdbImage);
+            }
+        }
+
+        // internal for testing
+        internal static void ValidateEmbeddedPortablePdbVersion(DebugDirectoryEntry entry)
+        {
+            // Major version encodes the version of Portable PDB format itself.
+            // Minor version encodes the version of Embedded Portable PDB blob.
+            // Accept any version of Portable PDB >= 1.0, 
+            // but only accept version 1.* of the Embedded Portable PDB blob.
+            // Any breaking change in the format should rev major version of the embedded blob.
+            ushort formatVersion = entry.MajorVersion;
+            if (formatVersion < PortablePdbVersions.MinFormatVersion)
+            {
+                throw new BadImageFormatException(SR.Format(SR.UnsupportedFormatVersion, PortablePdbVersions.Format(formatVersion)));
+            }
+
+            ushort embeddedBlobVersion = entry.MinorVersion;
+            if (embeddedBlobVersion != PortablePdbVersions.DefaultEmbeddedVersion)
+            {
+                throw new BadImageFormatException(SR.Format(SR.UnsupportedFormatVersion, PortablePdbVersions.Format(embeddedBlobVersion)));
+            }
+        }
+
+        // internal for testing
+        internal static unsafe ImmutableArray<byte> DecodeEmbeddedPortablePdbDebugDirectoryData(AbstractMemoryBlock block)
+        {
+            byte[] decompressed;
+            
+            const int headerSize = 2 * sizeof(int);
+
+            var headerReader = new BlobReader(block.Pointer, headerSize);
+
+            if (headerReader.ReadUInt32() != PortablePdbVersions.DebugDirectoryEmbeddedSignature)
+            {
+                throw new BadImageFormatException(SR.UnexpectedEmbeddedPortablePdbDataSignature);
+            }
+
+            int decompressedSize = headerReader.ReadInt32();
+
+            try
+            {
+                decompressed = new byte[decompressedSize];
+            }
+            catch
+            {
+                throw new BadImageFormatException(SR.DataTooBig);
+            }
+
+            var compressed = new ReadOnlyUnmanagedMemoryStream(block.Pointer + headerSize, block.Size - headerSize);
+            var deflate = new DeflateStream(compressed, CompressionMode.Decompress, leaveOpen: true);
+
+            if (decompressedSize > 0)
+            {
+                int actualLength;
+
+                try
+                {
+                    actualLength = deflate.TryReadAll(decompressed, 0, decompressed.Length);
+                }
+                catch (InvalidDataException e)
+                {
+                    throw new BadImageFormatException(e.Message, e.InnerException);
+                }
+
+                if (actualLength != decompressed.Length)
+                {
+                    throw new BadImageFormatException(SR.SizeMismatch);
+                }
+            }
+
+            // Check that there is no more compressed data left, 
+            // in case the decompressed size specified in the header is smaller 
+            // than the actual decompressed size of the data.
+            if (deflate.ReadByte() != -1)
+            {
+                throw new BadImageFormatException(SR.SizeMismatch);
+            }
+
+            return ImmutableByteArrayInterop.DangerousCreateFromUnderlyingArray(ref decompressed);
         }
     }
 }

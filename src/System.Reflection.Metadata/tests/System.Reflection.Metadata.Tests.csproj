@@ -33,10 +33,34 @@
     </ProjectReference>
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="..\..\Common\src\Interop\Windows\Interop.Libraries.cs">
+      <Link>Common\Interop\Windows\Interop.Libraries.cs</Link>
+    </Compile>
+    <Compile Include="..\..\Common\src\Interop\Windows\mincore\Interop.FreeLibrary.cs">
+      <Link>Common\Interop\Windows\Interop.FreeLibrary.cs</Link>
+    </Compile>
+    <Compile Include="..\..\Common\src\Interop\Windows\mincore\Interop.GetModuleHandle.cs">
+      <Link>Common\Interop\Windows\Interop.GetModuleHandle.cs</Link>
+    </Compile>
+    <Compile Include="..\..\Common\src\Interop\Windows\mincore\Interop.LoadLibraryEx.cs">
+      <Link>Common\Interop\Windows\Interop.LoadLibraryEx.cs</Link>
+    </Compile>
+    <Compile Include="..\..\Common\src\Microsoft\Win32\SafeHandles\SafeHandleZeroOrMinusOneIsInvalid.cs">
+      <Link>Common\Microsoft\Win32\Handles\SafeHandleZeroOrMinusOneIsInvalid.cs</Link>
+    </Compile>
+    <Compile Include="..\..\Common\src\Microsoft\Win32\SafeHandles\SafeLibraryHandle.cs">
+      <Link>Common\Microsoft\Win32\Handles\SafeLibraryHandle.cs</Link>
+    </Compile>
+    <Compile Include="..\..\Common\tests\System\IO\TempFile.cs">
+      <Link>Common\System\IO\TempFile.cs</Link>
+    </Compile>
     <Compile Include="Metadata\BlobContentIdTests.cs" />
     <Compile Include="Metadata\BlobTests.cs" />
     <Compile Include="Metadata\BlobUtilitiesTests.cs" />
     <Compile Include="Metadata\Ecma335\CodedIndexTests.cs" />
+    <Compile Include="Metadata\Ecma335\Encoding\ExceptionRegionEncoderTests.cs" />
+    <Compile Include="Metadata\Ecma335\Encoding\ControlFlowBuilderTests.cs" />
+    <Compile Include="Metadata\Ecma335\Encoding\InstructionEncoderTests.cs" />
     <Compile Include="Metadata\Ecma335\MetadataRootBuilderTests.cs" />
     <Compile Include="Metadata\Ecma335\PortablePdbBuilderTests.cs" />
     <Compile Include="Metadata\LargeTablesAndHeapsTests.cs" />
@@ -55,14 +79,16 @@
     <Compile Include="Metadata\Ecma335\MetadataBuilderTests.cs" />
     <Compile Include="Metadata\MetadataReaderTestHelpers.cs" />
     <Compile Include="Metadata\MetadataReaderTests.cs" />
-    <Compile Include="Metadata\Ecma335\Encoding\MethodBodyEncoderTests.cs" />
+    <Compile Include="Metadata\Ecma335\Encoding\MethodBodyStreamEncoderTests.cs" />
     <Compile Include="Metadata\TypeSystem\MethodImportRow.cs" />
     <Compile Include="Metadata\PortablePdb\StandalonePortablePdbStreamTests.cs" />
     <Compile Include="Metadata\TagToTokenTests.cs" />
     <Compile Include="Metadata\PortablePdb\DocumentNameTests.cs" />
     <Compile Include="PortableExecutable\DebugDirectoryBuilderTests.cs" />
+    <Compile Include="PortableExecutable\PEHeaderBuilderTests.cs" />
     <Compile Include="PortableExecutable\PEMemoryBlockTests.cs" />
     <Compile Include="TestUtilities\ByteArrayUtilities.cs" />
+    <Compile Include="TestUtilities\LoaderUtilities.cs" />
     <Compile Include="TestUtilities\PinnedBlob.cs" />
     <Compile Include="TestUtilities\SigningUtilities.cs" />
     <Compile Include="Utilities\AbstractMemoryBlockTests.cs" />

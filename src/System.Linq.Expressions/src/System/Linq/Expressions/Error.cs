@@ -401,9 +401,9 @@ namespace System.Linq.Expressions
         /// <summary>
         /// ArgumentException with message like "Expression of type '{0}' cannot be used for constructor parameter of type '{1}'"
         /// </summary>
-        internal static Exception ExpressionTypeDoesNotMatchConstructorParameter(object p0, object p1)
+        internal static Exception ExpressionTypeDoesNotMatchConstructorParameter(object p0, object p1, string paramName)
         {
-            return Dynamic.Utils.Error.ExpressionTypeDoesNotMatchConstructorParameter(p0, p1);
+            return Dynamic.Utils.Error.ExpressionTypeDoesNotMatchConstructorParameter(p0, p1, paramName);
         }
         /// <summary>
         /// ArgumentException with message like " Argument type '{0}' does not match the corresponding member type '{1}'"
@@ -415,9 +415,9 @@ namespace System.Linq.Expressions
         /// <summary>
         /// ArgumentException with message like " The member '{0}' is not declared on type '{1}' being created"
         /// </summary>
-        internal static Exception ArgumentMemberNotDeclOnType(object p0, object p1)
+        internal static Exception ArgumentMemberNotDeclOnType(object p0, object p1, string paramName)
         {
-            return new ArgumentException(Strings.ArgumentMemberNotDeclOnType(p0, p1));
+            return new ArgumentException(Strings.ArgumentMemberNotDeclOnType(p0, p1), paramName);
         }
         /// <summary>
         /// ArgumentException with message like "Expression of type '{0}' cannot be used for parameter of type '{1}' of method '{2}'"
@@ -825,7 +825,7 @@ namespace System.Linq.Expressions
         /// </summary>
         internal static Exception OutOfRange(string paramName, object p1)
         {
-            return new ArgumentOutOfRangeException(Strings.OutOfRange(paramName, p1), paramName);
+            return new ArgumentOutOfRangeException(paramName, Strings.OutOfRange(paramName, p1));
         }
         /// <summary>
         /// InvalidOperationException with message like "Cannot redefine label '{0}' in an inner block."
@@ -1072,6 +1072,11 @@ namespace System.Linq.Expressions
         internal static Exception NonAbstractConstructorRequired()
         {
             return new InvalidOperationException(Strings.NonAbstractConstructorRequired);
+        }
+
+        internal static Exception InvalidProgram()
+        {
+            return new InvalidProgramException();
         }
     }
 }
