@@ -965,7 +965,7 @@ namespace ManagedTests.DynamicCSharp.Conformance.dynamic.dynamicType.basic.array
 
     public class Program
     {
-        [Fact]
+        [ConditionalFact(nameof(PlatformDetection) + "." + nameof(PlatformDetection.IsNotWindowsSubsystemForLinux))] // https://github.com/Microsoft/BashOnWindows/issues/513
         public static void DynamicCSharpRunTest()
         {
             Assert.Equal(0, MainMethod());
@@ -5483,7 +5483,7 @@ namespace ManagedTests.DynamicCSharp.Conformance.dynamic.dynamicType.basic.unsfe
     // <Code>
     //class B
     //{
-    //[Test][Priority(Priority.Priority2)]public void DynamicCSharpRunTest(){Assert.AreEqual(0, MainMethod());} public unsafe static int MainMethod()
+    //[Test][Priority(Priority.Priority2)]public void DynamicCSharpRunTest(){Assert.AreEqual(0, MainMethod());} public static unsafe int MainMethod()
     //{
     ////basic alloc
     //dynamic y = 1;
@@ -10661,7 +10661,7 @@ namespace ManagedTests.DynamicCSharp.Conformance.dynamic.dynamicType.basic.opera
                     var b21 = a1;
                     var b22 = a2;
                     dynamic d2 = a2;
-                    if ((b11 <<= d2) != (b21 <<= b22))
+                    if (unchecked(b11 <<= d2) != unchecked(b21 <<= b22))
                     {
                         System.Console.WriteLine("Failed -- byte <<= byte");
                         return false;

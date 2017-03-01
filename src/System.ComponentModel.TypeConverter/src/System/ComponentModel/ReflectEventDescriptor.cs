@@ -60,16 +60,13 @@ namespace System.ComponentModel
     /// </summary>
     internal sealed class ReflectEventDescriptor : EventDescriptor
     {
-        private static readonly Type[] s_argsNone = new Type[0];
-        private static readonly object s_noDefault = new object();
-
         private Type _type;           // the delegate type for the event
         private readonly Type _componentClass; // the class of the component this info is for
 
         private MethodInfo _addMethod;     // the method to use when adding an event
         private MethodInfo _removeMethod;  // the method to use when removing an event
         private EventInfo _realEvent;      // actual event info... may be null
-        private bool _filledMethods = false;   // did we already call FillMethods() once?
+        private bool _filledMethods;   // did we already call FillMethods() once?
 
         /// <summary>
         ///     This is the main constructor for an ReflectEventDescriptor.
@@ -85,13 +82,13 @@ namespace System.ComponentModel
             {
                 throw new ArgumentException(SR.Format(SR.ErrorInvalidEventType, name));
             }
-            Debug.Assert(type.GetTypeInfo().IsSubclassOf(typeof(Delegate)), "Not a valid ReflectEvent: " + componentClass.FullName + "." + name + " " + type.FullName);
+            Debug.Assert(type.IsSubclassOf(typeof(Delegate)), $"Not a valid ReflectEvent: {componentClass.FullName}. {name} {type.FullName}");
             _componentClass = componentClass;
             _type = type;
         }
 
         public ReflectEventDescriptor(Type componentClass, EventInfo eventInfo)
-            : base(eventInfo.Name, new Attribute[0])
+            : base(eventInfo.Name, Array.Empty<Attribute>())
         {
             if (componentClass == null)
             {
@@ -123,13 +120,7 @@ namespace System.ComponentModel
         /// <summary>
         ///     Retrieves the type of the component this EventDescriptor is bound to.
         /// </summary>
-        public override Type ComponentType
-        {
-            get
-            {
-                return _componentClass;
-            }
-        }
+        public override Type ComponentType => _componentClass;
 
         /// <summary>
         ///     Retrieves the type of the delegate for this event.
@@ -146,13 +137,7 @@ namespace System.ComponentModel
         /// <summary>
         ///     Indicates whether the delegate type for this event is a multicast delegate.
         /// </summary>
-        public override bool IsMulticast
-        {
-            get
-            {
-                return (typeof(MulticastDelegate)).IsAssignableFrom(EventType);
-            }
-        }
+        public override bool IsMulticast => (typeof(MulticastDelegate)).IsAssignableFrom(EventType);
 
         /// <summary>
         ///     This adds the delegate value as a listener to when this event is fired
@@ -165,7 +150,6 @@ namespace System.ComponentModel
             if (component != null)
             {
                 ISite site = GetSite(component);
-#if FEATURE_ICOMPONENTCHANGESERVICE
                 IComponentChangeService changeService = null;
 
                 // Announce that we are about to change this component
@@ -177,7 +161,6 @@ namespace System.ComponentModel
 
                 if (changeService != null)
                 {
-#if FEATURE_CHECKOUTEXCEPTION
                     try {
                         changeService.OnComponentChanging(component, this);
                     }
@@ -187,11 +170,8 @@ namespace System.ComponentModel
                         }
                         throw coEx;
                     }
-#else
                     changeService.OnComponentChanging(component, this);
-#endif // FEATURE_CHECKOUTEXCEPTION
                 }
-#endif // FEATURE_ICOMPONENTCHANGESERVICE
 
                 bool shadowed = false;
 
@@ -217,14 +197,9 @@ namespace System.ComponentModel
                     _addMethod.Invoke(component, new[] { value });
                 }
 
-#if FEATURE_ICOMPONENTCHANGESERVICE
                 // Now notify the change service that the change was successful.
                 //
-                if (changeService != null)
-                {
-                    changeService.OnComponentChanged(component, this, null, value);
-                }
-#endif
+                changeService?.OnComponentChanged(component, this, null, value);
             }
         }
 
@@ -259,10 +234,10 @@ namespace System.ComponentModel
             }
             else
             {
-                Debug.Assert(_removeMethod != null, "Null remove method for " + Name);
+                Debug.Assert(_removeMethod != null, $"Null remove method for {Name}");
                 FillSingleMethodAttribute(_removeMethod, attributes);
 
-                Debug.Assert(_addMethod != null, "Null remove method for " + Name);
+                Debug.Assert(_addMethod != null, $"Null remove method for {Name}");
                 FillSingleMethodAttribute(_addMethod, attributes);
             }
 
@@ -276,11 +251,7 @@ namespace System.ComponentModel
         {
             string eventName = realEventInfo.Name;
             BindingFlags bindingFlags = BindingFlags.Instance | BindingFlags.Public | BindingFlags.DeclaredOnly;
-#if FEATURE_MEMBERINFO_REFLECTEDTYPE
             Type currentReflectType = realEventInfo.ReflectedType;
-#else
-            Type currentReflectType = _componentClass;
-#endif
             Debug.Assert(currentReflectType != null, "currentReflectType cannot be null");
             int depth = 0;
 
@@ -290,18 +261,14 @@ namespace System.ComponentModel
             while (currentReflectType != typeof(object))
             {
                 depth++;
-                currentReflectType = currentReflectType.GetTypeInfo().BaseType;
+                currentReflectType = currentReflectType.BaseType;
             }
 
             if (depth > 0)
             {
                 // Now build up an array in reverse order
                 //
-#if FEATURE_MEMBERINFO_REFLECTEDTYPE
                 currentReflectType = realEventInfo.ReflectedType;
-#else
-                currentReflectType = _componentClass;
-#endif
                 Attribute[][] attributeStack = new Attribute[depth][];
 
                 while (currentReflectType != typeof(object))
@@ -319,7 +286,7 @@ namespace System.ComponentModel
 
                     // Ready for the next loop iteration.
                     //
-                    currentReflectType = currentReflectType.GetTypeInfo().BaseType;
+                    currentReflectType = currentReflectType.BaseType;
                 }
 
                 // Now trawl the attribute stack so that we add attributes
@@ -355,7 +322,7 @@ namespace System.ComponentModel
 
                 if (_addMethod == null || _removeMethod == null)
                 {
-                    Type start = _componentClass.GetTypeInfo().BaseType;
+                    Type start = _componentClass.BaseType;
                     while (start != null && start != typeof(object))
                     {
                         BindingFlags bindingFlags = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
@@ -397,7 +364,7 @@ namespace System.ComponentModel
                 _removeMethod = FindMethod(_componentClass, "RemoveOn" + Name, argsType, typeof(void));
                 if (_addMethod == null || _removeMethod == null)
                 {
-                    Debug.Fail("Missing event accessors for " + _componentClass.FullName + "." + Name);
+                    Debug.Fail($"Missing event accessors for {_componentClass.FullName}. {Name}");
                     throw new ArgumentException(SR.Format(SR.ErrorMissingEventAccessors, Name));
                 }
             }
@@ -409,11 +376,7 @@ namespace System.ComponentModel
         {
             string methodName = realMethodInfo.Name;
             BindingFlags bindingFlags = BindingFlags.Instance | BindingFlags.Public | BindingFlags.DeclaredOnly;
-#if FEATURE_MEMBERINFO_REFLECTEDTYPE
-            Type currentReflectType = realEventInfo.ReflectedType;
-#else
-            Type currentReflectType = _componentClass;
-#endif
+            Type currentReflectType = realMethodInfo.ReflectedType;
             Debug.Assert(currentReflectType != null, "currentReflectType cannot be null");
 
             // First, calculate the depth of the object hierarchy.  We do this so we can do a single
@@ -423,18 +386,14 @@ namespace System.ComponentModel
             while (currentReflectType != null && currentReflectType != typeof(object))
             {
                 depth++;
-                currentReflectType = currentReflectType.GetTypeInfo().BaseType;
+                currentReflectType = currentReflectType.BaseType;
             }
 
             if (depth > 0)
             {
                 // Now build up an array in reverse order
                 //
-#if FEATURE_MEMBERINFO_REFLECTEDTYPE
-                currentReflectType = realEventInfo.ReflectedType;
-#else
-                currentReflectType = _componentClass;
-#endif
+                currentReflectType = realMethodInfo.ReflectedType;
                 Attribute[][] attributeStack = new Attribute[depth][];
 
                 while (currentReflectType != null && currentReflectType != typeof(object))
@@ -452,7 +411,7 @@ namespace System.ComponentModel
 
                     // Ready for the next loop iteration.
                     //
-                    currentReflectType = currentReflectType.GetTypeInfo().BaseType;
+                    currentReflectType = currentReflectType.BaseType;
                 }
 
                 // Now trawl the attribute stack so that we add attributes
@@ -482,7 +441,6 @@ namespace System.ComponentModel
             if (component != null)
             {
                 ISite site = GetSite(component);
-#if FEATURE_ICOMPONENTCHANGESERVICE
                 IComponentChangeService changeService = null;
 
                 // Announce that we are about to change this component
@@ -494,7 +452,6 @@ namespace System.ComponentModel
 
                 if (changeService != null)
                 {
-#if FEATURE_CHECKOUTEXCEPTION
                     try {
                         changeService.OnComponentChanging(component, this);
                     }
@@ -504,11 +461,9 @@ namespace System.ComponentModel
                         }
                         throw coEx;
                     }
-#else
                     changeService.OnComponentChanging(component, this);
-#endif // FEATURE_CHECKOUTEXCEPTION
                 }
-#endif // FEATURE_ICOMPONENTCHANGESERVICE
+
                 bool shadowed = false;
 
                 if (site != null && site.DesignMode)
@@ -528,14 +483,9 @@ namespace System.ComponentModel
                     _removeMethod.Invoke(component, new[] { value });
                 }
 
-#if FEATURE_ICOMPONENTCHANGESERVICE
                 // Now notify the change service that the change was successful.
                 //
-                if (changeService != null)
-                {
-                    changeService.OnComponentChanged(component, this, null, value);
-                }
-#endif
+                changeService?.OnComponentChanged(component, this, null, value);
             }
         }
     }

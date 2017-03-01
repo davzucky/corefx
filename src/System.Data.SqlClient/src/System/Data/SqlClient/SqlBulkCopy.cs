@@ -17,8 +17,6 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Xml;
 
-using Res = System.SR;
-
 
 namespace System.Data.SqlClient
 {
@@ -414,7 +412,7 @@ namespace System.Data.SqlClient
             string[] parts;
             try
             {
-                parts = MultipartIdentifier.ParseMultipartIdentifier(this.DestinationTableName, "[\"", "]\"", Res.SQL_BulkCopyDestinationTableName, true);
+                parts = MultipartIdentifier.ParseMultipartIdentifier(this.DestinationTableName, "[\"", "]\"", SR.SQL_BulkCopyDestinationTableName, true);
             }
             catch (Exception e)
             {
@@ -526,14 +524,14 @@ namespace System.Data.SqlClient
         // builds and executes the update bulk command
         private string AnalyzeTargetAndCreateUpdateBulkCommand(BulkCopySimpleResultSet internalResults)
         {
+            Debug.Assert(internalResults != null, "Where are the results from the initial query?");
+
             StringBuilder updateBulkCommandText = new StringBuilder();
 
             if (0 == internalResults[CollationResultId].Count)
             {
                 throw SQL.BulkLoadNoCollation();
             }
-
-            Debug.Assert((internalResults != null), "Where are the results from the initial query?");
 
             updateBulkCommandText.AppendFormat("insert bulk {0} (", this.DestinationTableName);
             int nmatched = 0;               // number of columns that match and are accepted

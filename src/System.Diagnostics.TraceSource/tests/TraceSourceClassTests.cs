@@ -64,11 +64,17 @@ namespace System.Diagnostics.TraceSourceTests
             trace.TraceEvent(TraceEventType.Critical, 0);
         }
 
+        [System.Runtime.CompilerServices.MethodImplAttribute(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
+        static WeakReference PruneMakeRef()
+        {
+            return new WeakReference(new TraceSource("TestTraceSource"));
+        }
+
         [Fact]
         public void PruneTest()
         {
             var strongTrace = new TraceSource("TestTraceSource");
-            var traceRef = new WeakReference(new TraceSource("TestTraceSource"));
+            var traceRef = PruneMakeRef();
             Assert.True(traceRef.IsAlive);
             GC.Collect(2);
             Trace.Refresh();
@@ -292,6 +298,18 @@ namespace System.Diagnostics.TraceSourceTests
             trace.Listeners.Add(listener);
             trace.TraceData(TraceEventType.Verbose, 0, new Object[0]);
             Assert.Equal(1, listener.GetCallCount(Method.TraceData));
+            var flushExpected = AutoFlush ? 1 : 0;
+            Assert.Equal(flushExpected, listener.GetCallCount(Method.Flush));
+        }
+
+        [Fact]
+        public void TraceTransferTest()
+        {
+            var trace = new TraceSource("TestTraceSource", SourceLevels.All);
+            var listener = GetTraceListener();
+            trace.Listeners.Add(listener);
+            trace.TraceTransfer(1, "Trace transfer test message", Trace.CorrelationManager.ActivityId);
+            Assert.Equal(1, listener.GetCallCount(Method.TraceTransfer));
             var flushExpected = AutoFlush ? 1 : 0;
             Assert.Equal(flushExpected, listener.GetCallCount(Method.Flush));
         }

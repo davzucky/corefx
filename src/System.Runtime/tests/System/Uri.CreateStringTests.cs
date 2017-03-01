@@ -540,7 +540,7 @@ namespace System.Tests
             yield return new object[] { "//unchost/path1/path2", "/path1/path2", "", "" };
             yield return new object[] { @"/\unchost/path1/path2", "/path1/path2", "", "" };
             yield return new object[] { @"\/unchost/path1/path2", "/path1/path2", "", "" };
-            // Implict UNC with backslash in path
+            // Implicit UNC with backslash in path
             yield return new object[] { @"//unchost/path1\path2/path3\path4", "/path1/path2/path3/path4", "", "" };
             yield return new object[] { @"\\unchost/path1\path2/path3\path4", "/path1/path2/path3/path4", "", "" };
             yield return new object[] { @"/\unchost/path1\path2/path3\path4", "/path1/path2/path3/path4", "", "" };
@@ -1127,6 +1127,10 @@ namespace System.Tests
             yield return new object[] { "uri://a:65536", UriKind.Absolute };
             yield return new object[] { "uri://a:2147483648", UriKind.Absolute };
             yield return new object[] { "uri://a:80:80", UriKind.Absolute };
+
+            // Invalid unicode
+            yield return new object[] { "http://\uD800", UriKind.Absolute };
+            yield return new object[] { "http://\uDC00", UriKind.Absolute };
         }
 
         [Theory]
@@ -1142,13 +1146,6 @@ namespace System.Tests
             Uri uri;
             Assert.False(Uri.TryCreate(uriString, uriKind, out uri));
             Assert.Null(uri);
-        }
-
-        [Fact]
-        public void Create_String_InvalidUnicode()
-        {
-            Create_String_Invalid("http://\uD800", UriKind.Absolute);
-            Create_String_Invalid("http://\uDC00", UriKind.Absolute);
         }
 
         public static void PerformAction(string uriString, UriKind uriKind, Action<Uri> action)

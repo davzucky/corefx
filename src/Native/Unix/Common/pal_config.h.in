@@ -28,7 +28,8 @@
 #cmakedefine01 HAVE_STATFS
 #cmakedefine01 HAVE_EPOLL
 #cmakedefine01 HAVE_KQUEUE
-#cmakedefine01 HAVE_SENDFILE
+#cmakedefine01 HAVE_SENDFILE_4
+#cmakedefine01 HAVE_SENDFILE_6
 #cmakedefine01 HAVE_FCOPYFILE
 #cmakedefine01 HAVE_GETHOSTBYNAME_R
 #cmakedefine01 HAVE_GETHOSTBYADDR_R
@@ -50,6 +51,7 @@
 #cmakedefine01 HAVE_INOTIFY
 #cmakedefine01 HAVE_CLOCK_MONOTONIC
 #cmakedefine01 HAVE_MACH_ABSOLUTE_TIME
+#cmakedefine01 HAVE_MACH_TIMEBASE_INFO
 #cmakedefine01 HAVE_CURLM_ADDED_ALREADY
 #cmakedefine01 HAVE_CURL_HTTP_VERSION_2_0
 #cmakedefine01 HAVE_CURLPIPE_MULTIPLEX
@@ -60,6 +62,17 @@
 #cmakedefine01 HAVE_GSS_SPNEGO_MECHANISM
 #cmakedefine01 HAVE_GSS_KRB5_CRED_NO_CI_FLAGS_X
 #cmakedefine01 HAVE_HEIMDAL_HEADERS
+#cmakedefine01 HAVE_NSGETENVIRON
+#cmakedefine01 HAVE_CRT_EXTERNS_H
+#cmakedefine01 HAVE_GETDOMAINNAME
+#cmakedefine01 HAVE_UNAME
+#cmakedefine01 HAVE_FUTIMES
+#cmakedefine01 HAVE_FUTIMENS
+#cmakedefine01 HAVE_MKSTEMPS
+#cmakedefine01 HAVE_MKSTEMP
+#cmakedefine01 IPV6MR_INTERFACE_UNSIGNED
+#cmakedefine01 BIND_ADDRLEN_UNSIGNED
+#cmakedefine01 INOTIFY_RM_WATCH_WD_UNSIGNED
 
 // Mac OS X has stat64, but it is deprecated since plain stat now
 // provides the same 64-bit aware struct when targeting OS X > 10.5

@@ -17,40 +17,24 @@ namespace System.Net.Sockets
     // BeginReceive, BeginReceiveFrom, BeginSendFile, and BeginAccept calls.
     internal partial class BaseOverlappedAsyncResult : ContextAwareResult
     {
+        // Sentinel object passed to callers of PostCompletion to use as the
+        // "result" of this operation, in order to avoid boxing the actual result.
+        private static readonly object s_resultObjectSentinel = new object();
+        // The actual result (number of bytes transferred)
+        internal int _numBytes;
+
         // PostCompletion returns the result object to be set before the user's callback is invoked.
         internal virtual object PostCompletion(int numBytes)
         {
-            return numBytes;
+            _numBytes = numBytes;
+            return s_resultObjectSentinel; // return sentinel rather than boxing numBytes
         }
 
-        // This method is called after an asynchronous call is made for the user.
-        // It checks and acts accordingly if the IO:
-        // 1) completed synchronously.
-        // 2) was pended.
-        // 3) failed.
-        internal unsafe SocketError CheckAsyncCallOverlappedResult(SocketError errorCode)
+        // Used instead of the base InternalWaitForCompletion when storing an Int32 result
+        internal int InternalWaitForCompletionInt32Result()
         {
-            if (GlobalLog.IsEnabled)
-            {
-                GlobalLog.Print(
-                    "BaseOverlappedAsyncResult#" + LoggingHash.HashString(this) +
-                    "::CheckAsyncCallOverlappedResult(" + errorCode.ToString() + ")");
-            }
-
-            if (errorCode == SocketError.Success || errorCode == SocketError.IOPending)
-            {
-                // Ignore cases in which a completion packet will be queued:
-                // we'll deal with this IO in the callback.
-                return SocketError.Success;
-            }
-
-            // In the remaining cases a completion packet will NOT be queued:
-            // we have to call the callback explicitly signaling an error.
-            ErrorCode = (int)errorCode;
-            Result = -1;
-
-            ReleaseUnmanagedStructures();  // Additional release for the completion that won't happen.
-            return errorCode;
+            base.InternalWaitForCompletion();
+            return _numBytes;
         }
     }
 }

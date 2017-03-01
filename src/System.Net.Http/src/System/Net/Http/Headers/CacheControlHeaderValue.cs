@@ -3,8 +3,9 @@
 // See the LICENSE file in the project root for more information.
 
 using System.Collections.Generic;
-using System.Diagnostics.Contracts;
+using System.Diagnostics;
 using System.Globalization;
+using System.IO;
 using System.Text;
 
 namespace System.Net.Http.Headers
@@ -164,7 +165,7 @@ namespace System.Net.Http.Headers
 
         private CacheControlHeaderValue(CacheControlHeaderValue source)
         {
-            Contract.Requires(source != null);
+            Debug.Assert(source != null);
 
             _noCache = source._noCache;
             _noStore = source._noStore;
@@ -207,7 +208,7 @@ namespace System.Net.Http.Headers
 
         public override string ToString()
         {
-            StringBuilder sb = new StringBuilder();
+            StringBuilder sb = StringBuilderCache.Acquire();
 
             AppendValueIfRequired(sb, _noStore, noStoreString);
             AppendValueIfRequired(sb, _noTransform, noTransformString);
@@ -271,7 +272,7 @@ namespace System.Net.Http.Headers
 
             NameValueHeaderValue.ToString(_extensions, ',', false, sb);
 
-            return sb.ToString();
+            return StringBuilderCache.GetStringAndRelease(sb);
         }
 
         public override bool Equals(object obj)
@@ -380,7 +381,7 @@ namespace System.Net.Http.Headers
         internal static int GetCacheControlLength(string input, int startIndex, CacheControlHeaderValue storeValue,
             out CacheControlHeaderValue parsedValue)
         {
-            Contract.Requires(startIndex >= 0);
+            Debug.Assert(startIndex >= 0);
 
             parsedValue = null;
 
@@ -523,7 +524,7 @@ namespace System.Net.Http.Headers
         private static bool TrySetOptionalTokenList(NameValueHeaderValue nameValue, ref bool boolField,
             ref ObjectCollection<string> destination)
         {
-            Contract.Requires(nameValue != null);
+            Debug.Assert(nameValue != null);
 
             if (nameValue.Value == null)
             {
@@ -585,7 +586,7 @@ namespace System.Net.Http.Headers
 
         private static bool TrySetTimeSpan(NameValueHeaderValue nameValue, ref TimeSpan? timeSpan)
         {
-            Contract.Requires(nameValue != null);
+            Debug.Assert(nameValue != null);
 
             if (nameValue.Value == null)
             {
@@ -640,7 +641,7 @@ namespace System.Net.Http.Headers
 
         private static void CheckIsValidToken(string item)
         {
-            HeaderUtilities.CheckValidToken(item, "item");
+            HeaderUtilities.CheckValidToken(item, nameof(item));
         }
 
         object ICloneable.Clone()

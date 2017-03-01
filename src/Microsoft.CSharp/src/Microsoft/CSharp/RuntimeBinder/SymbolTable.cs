@@ -3,11 +3,8 @@
 // See the LICENSE file in the project root for more information.
 
 using System;
-using System.Collections;
 using System.Collections.Generic;
-using System.Collections.ObjectModel;
 using System.Diagnostics;
-using System.Globalization;
 using System.Linq;
 using System.Reflection;
 using System.Runtime.CompilerServices;
@@ -17,7 +14,7 @@ using Microsoft.CSharp.RuntimeBinder.Syntax;
 
 namespace Microsoft.CSharp.RuntimeBinder
 {
-    internal class SymbolTable
+    internal sealed class SymbolTable
     {
         /////////////////////////////////////////////////////////////////////////////////
         // Members
@@ -25,19 +22,19 @@ namespace Microsoft.CSharp.RuntimeBinder
         private HashSet<NameHashKey> _namesLoadedForEachType;
 
         // Members from the managed binder.
-        private SYMTBL _symbolTable;
-        private SymFactory _symFactory;
-        private NameManager _nameManager;
-        private TypeManager _typeManager;
-        private BSYMMGR _bsymmgr;
-        private CSemanticChecker _semanticChecker;
+        private readonly SYMTBL _symbolTable;
+        private readonly SymFactory _symFactory;
+        private readonly NameManager _nameManager;
+        private readonly TypeManager _typeManager;
+        private readonly BSYMMGR _bsymmgr;
+        private readonly CSemanticChecker _semanticChecker;
 
         private NamespaceSymbol _rootNamespace;
-        private InputFile _infile;
+        private readonly InputFile _infile;
 
         /////////////////////////////////////////////////////////////////////////////////
 
-        private sealed class NameHashKey
+        private sealed class NameHashKey : IEquatable<NameHashKey>
         {
             internal readonly Type type;
             internal readonly string name;
@@ -48,11 +45,9 @@ namespace Microsoft.CSharp.RuntimeBinder
                 this.name = name;
             }
 
-            public override bool Equals(object obj)
-            {
-                NameHashKey h = obj as NameHashKey;
-                return h != null && type.Equals(h.type) && name.Equals(h.name);
-            }
+            public bool Equals(NameHashKey other) => other != null && type.Equals(other.type) && name.Equals(other.name);
+
+            public override bool Equals(object obj) => Equals(obj as NameHashKey);
 
             public override int GetHashCode()
             {
@@ -86,7 +81,7 @@ namespace Microsoft.CSharp.RuntimeBinder
 
         /////////////////////////////////////////////////////////////////////////////////
 
-        internal void ClearCache()
+        private void ClearCache()
         {
             _typesWithConversionsLoaded = new HashSet<Type>();
             _namesLoadedForEachType = new HashSet<NameHashKey>();
@@ -104,9 +99,9 @@ namespace Microsoft.CSharp.RuntimeBinder
             Type callingType)
         {
             // The first argument is the object that we're calling off of.
-            if (callingType.GetTypeInfo().IsGenericType)
+            if (callingType.IsGenericType)
             {
-                callingType = callingType.GetTypeInfo().GetGenericTypeDefinition();
+                callingType = callingType.GetGenericTypeDefinition();
             }
             if (name == SpecialNames.Indexer)
             {
@@ -226,9 +221,9 @@ namespace Microsoft.CSharp.RuntimeBinder
             foreach (Type t in inheritance)
             {
                 Type type = t;
-                if (type.GetTypeInfo().IsGenericType)
+                if (type.IsGenericType)
                 {
-                    type = type.GetTypeInfo().GetGenericTypeDefinition();
+                    type = type.GetGenericTypeDefinition();
                 }
                 NameHashKey key = new NameHashKey(type, name);
 
@@ -309,7 +304,7 @@ namespace Microsoft.CSharp.RuntimeBinder
         {
             List<Type> list = new List<Type>();
             list.Insert(0, type);
-            for (Type parent = type.GetTypeInfo().BaseType; parent != null; parent = parent.GetTypeInfo().BaseType)
+            for (Type parent = type.BaseType; parent != null; parent = parent.BaseType)
             {
                 // Load it in the symbol table.
                 LoadSymbolsFromType(parent);
@@ -347,7 +342,7 @@ namespace Microsoft.CSharp.RuntimeBinder
             {
                 p = string.Empty;
             }
-            return SymbolTable.GetName(p, _nameManager);
+            return GetName(p, _nameManager);
         }
 
         /////////////////////////////////////////////////////////////////////////////////
@@ -355,12 +350,12 @@ namespace Microsoft.CSharp.RuntimeBinder
         private Name GetName(Type type)
         {
             string name = type.Name;
-            if (type.GetTypeInfo().IsGenericType)
+            if (type.IsGenericType)
             {
                 // Trim the name to remove the ` at the end.
                 name = name.Split('`')[0];
             }
-            return SymbolTable.GetName(name, _nameManager);
+            return GetName(name, _nameManager);
         }
 
         /////////////////////////////////////////////////////////////////////////////////
@@ -397,7 +392,7 @@ namespace Microsoft.CSharp.RuntimeBinder
                     Type t = genericArguments[i];
                     ctypes[i].AsTypeParameterType().GetTypeParameterSymbol().SetBounds(
                         _bsymmgr.AllocParams(
-                        GetCTypeArrayFromTypes(t.GetTypeInfo().GetGenericParameterConstraints())));
+                        GetCTypeArrayFromTypes(t.GetGenericParameterConstraints())));
                 }
                 return _bsymmgr.AllocParams(ctypes.Length, ctypes);
             }
@@ -408,9 +403,9 @@ namespace Microsoft.CSharp.RuntimeBinder
 
         private TypeArray GetAggregateTypeParameters(Type type, AggregateSymbol agg)
         {
-            if (type.GetTypeInfo().IsGenericType)
+            if (type.IsGenericType)
             {
-                Type genericDefinition = type.GetTypeInfo().GetGenericTypeDefinition();
+                Type genericDefinition = type.GetGenericTypeDefinition();
                 Type[] genericArguments = genericDefinition.GetGenericArguments();
                 List<CType> ctypes = new List<CType>();
                 int outerParameters = agg.isNested() ? agg.GetOuterAgg().GetTypeVarsAll().size : 0;
@@ -538,14 +533,14 @@ namespace Microsoft.CSharp.RuntimeBinder
             int pos = t.GenericParameterPosition;
 
             Type parentType = t.DeclaringType;
-            if (parentType != null && parentType.GetTypeInfo().IsGenericType)
+            if (parentType != null && parentType.IsGenericType)
             {
-                parentType = parentType.GetTypeInfo().GetGenericTypeDefinition();
+                parentType = parentType.GetGenericTypeDefinition();
             }
 
-            if (t.GetTypeInfo().DeclaringMethod != null)
+            if (t.DeclaringMethod != null)
             {
-                MethodBase parentMethod = t.GetTypeInfo().DeclaringMethod;
+                MethodBase parentMethod = t.DeclaringMethod;
 
                 if (parentType.GetGenericArguments() == null || pos >= parentType.GetGenericArguments().Length)
                 {
@@ -556,12 +551,12 @@ namespace Microsoft.CSharp.RuntimeBinder
             while (parentType.GetGenericArguments().Length > pos)
             {
                 Type nextParent = parentType.DeclaringType;
-                if (nextParent != null && nextParent.GetTypeInfo().IsGenericType)
+                if (nextParent != null && nextParent.IsGenericType)
                 {
-                    nextParent = nextParent.GetTypeInfo().GetGenericTypeDefinition();
+                    nextParent = nextParent.GetGenericTypeDefinition();
                 }
 
-                if (nextParent != null && nextParent.GetGenericArguments() != null && nextParent.GetGenericArguments().Length > pos)
+                if (nextParent?.GetGenericArguments()?.Length > pos)
                 {
                     parentType = nextParent;
                 }
@@ -621,26 +616,26 @@ namespace Microsoft.CSharp.RuntimeBinder
                     t.GenericParameterPosition);
             }
 
-            if ((t.GetTypeInfo().GenericParameterAttributes & GenericParameterAttributes.Covariant) != 0)
+            if ((t.GenericParameterAttributes & GenericParameterAttributes.Covariant) != 0)
             {
                 typeParam.Covariant = true;
             }
-            if ((t.GetTypeInfo().GenericParameterAttributes & GenericParameterAttributes.Contravariant) != 0)
+            if ((t.GenericParameterAttributes & GenericParameterAttributes.Contravariant) != 0)
             {
                 typeParam.Contravariant = true;
             }
 
             SpecCons cons = SpecCons.None;
 
-            if ((t.GetTypeInfo().GenericParameterAttributes & GenericParameterAttributes.DefaultConstructorConstraint) != 0)
+            if ((t.GenericParameterAttributes & GenericParameterAttributes.DefaultConstructorConstraint) != 0)
             {
                 cons |= SpecCons.New;
             }
-            if ((t.GetTypeInfo().GenericParameterAttributes & GenericParameterAttributes.ReferenceTypeConstraint) != 0)
+            if ((t.GenericParameterAttributes & GenericParameterAttributes.ReferenceTypeConstraint) != 0)
             {
                 cons |= SpecCons.Ref;
             }
-            if ((t.GetTypeInfo().GenericParameterAttributes & GenericParameterAttributes.NotNullableValueTypeConstraint) != 0)
+            if ((t.GenericParameterAttributes & GenericParameterAttributes.NotNullableValueTypeConstraint) != 0)
             {
                 cons |= SpecCons.Val;
             }
@@ -670,13 +665,13 @@ namespace Microsoft.CSharp.RuntimeBinder
             }
 
             NamespaceOrAggregateSymbol current = _rootNamespace;
-            NamespaceOrAggregateSymbol next = null;
 
             // Go through the declaration chain and add namespaces and types for 
             // each element in the chain.
             for (int i = 0; i < declarationChain.Count; i++)
             {
                 object o = declarationChain[i];
+                NamespaceOrAggregateSymbol next;
                 if (o is Type)
                 {
                     Type t = o as Type;
@@ -708,10 +703,10 @@ namespace Microsoft.CSharp.RuntimeBinder
                     // similarly named types, but we are not going to try to solve that
                     // scenario here.
 
-                    if (next != null && next is AggregateSymbol)
+                    if (next != null)
                     {
                         Type existingType = (next as AggregateSymbol).AssociatedSystemType;
-                        Type newType = t.GetTypeInfo().IsGenericType ? t.GetTypeInfo().GetGenericTypeDefinition() : t;
+                        Type newType = t.IsGenericType ? t.GetGenericTypeDefinition() : t;
 
                         // We use "IsEquivalentTo" so that unified local types for NoPIA do
                         // not trigger a reset. There are other mechanisms to make those sorts
@@ -803,7 +798,7 @@ namespace Microsoft.CSharp.RuntimeBinder
         private CType GetConstructedType(Type type, AggregateSymbol agg)
         {
             // We've found the one we want, so return it.
-            if (type.GetTypeInfo().IsGenericType)
+            if (type.IsGenericType)
             {
                 // If we're a generic type, then we need to add the type arguments.
                 List<CType> types = new List<CType>();
@@ -897,9 +892,9 @@ namespace Microsoft.CSharp.RuntimeBinder
             {
                 callChain.Add(t);
 
-                if (t.IsGenericParameter && t.GetTypeInfo().DeclaringMethod != null)
+                if (t.IsGenericParameter && t.DeclaringMethod != null)
                 {
-                    MethodBase methodBase = t.GetTypeInfo().DeclaringMethod;
+                    MethodBase methodBase = t.DeclaringMethod;
                     ParameterInfo[] parameters = methodBase.GetParameters();
 
                     bool bAdded = false;
@@ -1009,22 +1004,22 @@ namespace Microsoft.CSharp.RuntimeBinder
             Type type)
         {
             AggregateSymbol agg = _symFactory.CreateAggregate(GetName(type), parent, _infile, _typeManager);
-            agg.AssociatedSystemType = type.GetTypeInfo().IsGenericType ? type.GetTypeInfo().GetGenericTypeDefinition() : type;
-            agg.AssociatedAssembly = type.GetTypeInfo().Assembly;
+            agg.AssociatedSystemType = type.IsGenericType ? type.GetGenericTypeDefinition() : type;
+            agg.AssociatedAssembly = type.Assembly;
 
             // We have to set the TypeVars, access, and the AggKind before we can set the aggState
             // because of the assertion checking the compiler does.
             AggKindEnum kind;
-            if (type.GetTypeInfo().IsInterface)
+            if (type.IsInterface)
             {
                 kind = AggKindEnum.Interface;
             }
-            else if (type.GetTypeInfo().IsEnum)
+            else if (type.IsEnum)
             {
                 kind = AggKindEnum.Enum;
                 agg.SetUnderlyingType(GetCTypeFromType(Enum.GetUnderlyingType(type)).AsAggregateType());
             }
-            else if (type.GetTypeInfo().IsValueType)
+            else if (type.IsValueType)
             {
                 kind = AggKindEnum.Struct;
             }
@@ -1033,9 +1028,9 @@ namespace Microsoft.CSharp.RuntimeBinder
                 // If it derives from Delegate or MulticastDelegate, then its
                 // a delegate type. However, MuticastDelegate itself is not a 
                 // delegate type.
-                if (type.GetTypeInfo().BaseType != null &&
-                    (type.GetTypeInfo().BaseType.FullName == "System.MulticastDelegate" ||
-                    type.GetTypeInfo().BaseType.FullName == "System.Delegate") &&
+                if (type.BaseType != null &&
+                    (type.BaseType.FullName == "System.MulticastDelegate" ||
+                    type.BaseType.FullName == "System.Delegate") &&
                     type.FullName != "System.MulticastDelegate")
                 {
                     kind = AggKindEnum.Delegate;
@@ -1049,34 +1044,34 @@ namespace Microsoft.CSharp.RuntimeBinder
             agg.SetTypeVars(BSYMMGR.EmptyTypeArray());
 
             ACCESS access;
-            if (type.GetTypeInfo().IsPublic)
+            if (type.IsPublic)
             {
                 access = ACCESS.ACC_PUBLIC;
             }
-            else if (type.GetTypeInfo().IsNested)
+            else if (type.IsNested)
             {
                 // If its nested, we may have other accessibility options.
-                if (type.GetTypeInfo().IsNestedAssembly || type.GetTypeInfo().IsNestedFamANDAssem)
+                if (type.IsNestedAssembly || type.IsNestedFamANDAssem)
                 {
                     // Note that we don't directly support NestedFamANDAssem, but we're just
                     // going to default to internal.
                     access = ACCESS.ACC_INTERNAL;
                 }
-                else if (type.GetTypeInfo().IsNestedFamORAssem)
+                else if (type.IsNestedFamORAssem)
                 {
                     access = ACCESS.ACC_INTERNALPROTECTED;
                 }
-                else if (type.GetTypeInfo().IsNestedPrivate)
+                else if (type.IsNestedPrivate)
                 {
                     access = ACCESS.ACC_PRIVATE;
                 }
-                else if (type.GetTypeInfo().IsNestedFamily)
+                else if (type.IsNestedFamily)
                 {
                     access = ACCESS.ACC_PROTECTED;
                 }
                 else
                 {
-                    Debug.Assert(type.GetTypeInfo().IsPublic || type.GetTypeInfo().IsNestedPublic);
+                    Debug.Assert(type.IsPublic || type.IsNestedPublic);
                     access = ACCESS.ACC_PUBLIC;
                 }
             }
@@ -1092,9 +1087,9 @@ namespace Microsoft.CSharp.RuntimeBinder
                 agg.SetTypeVars(GetAggregateTypeParameters(type, agg));
             }
 
-            if (type.GetTypeInfo().IsGenericType)
+            if (type.IsGenericType)
             {
-                Type genericDefinition = type.GetTypeInfo().GetGenericTypeDefinition();
+                Type genericDefinition = type.GetGenericTypeDefinition();
                 Type[] genericArguments = genericDefinition.GetGenericArguments();
 
                 // After we load the type parameters, we need to resolve their bounds.
@@ -1105,19 +1100,19 @@ namespace Microsoft.CSharp.RuntimeBinder
                     {
                         agg.GetTypeVars().Item(i).AsTypeParameterType().GetTypeParameterSymbol().SetBounds(
                             _bsymmgr.AllocParams(
-                            GetCTypeArrayFromTypes(t.GetTypeInfo().GetGenericParameterConstraints())));
+                            GetCTypeArrayFromTypes(t.GetGenericParameterConstraints())));
                     }
                 }
             }
 
             agg.SetAnonymousType(false);
-            agg.SetAbstract(type.GetTypeInfo().IsAbstract);
+            agg.SetAbstract(type.IsAbstract);
 
             {
                 string typeName = type.FullName;
-                if (type.GetTypeInfo().IsGenericType)
+                if (type.IsGenericType)
                 {
-                    typeName = type.GetTypeInfo().GetGenericTypeDefinition().FullName;
+                    typeName = type.GetGenericTypeDefinition().FullName;
                 }
                 if (typeName != null && PredefinedTypeFacts.IsPredefinedType(typeName))
                 {
@@ -1125,21 +1120,21 @@ namespace Microsoft.CSharp.RuntimeBinder
                 }
             }
             agg.SetLayoutError(false);
-            agg.SetSealed(type.GetTypeInfo().IsSealed);
+            agg.SetSealed(type.IsSealed);
             agg.SetUnmanagedStruct(false);
             agg.SetManagedStruct(false);
             agg.SetHasExternReference(false);
 
-            agg.SetComImport(type.GetTypeInfo().IsImport);
+            agg.SetComImport(type.IsImport);
 
             AggregateType baseAggType = agg.getThisType();
-            if (type.GetTypeInfo().BaseType != null)
+            if (type.BaseType != null)
             {
-                // type.GetTypeInfo().BaseType can be null for Object or for interface types.
-                Type t = type.GetTypeInfo().BaseType;
-                if (t.GetTypeInfo().IsGenericType)
+                // type.BaseType can be null for Object or for interface types.
+                Type t = type.BaseType;
+                if (t.IsGenericType)
                 {
-                    t = t.GetTypeInfo().GetGenericTypeDefinition();
+                    t = t.GetGenericTypeDefinition();
                 }
                 agg.SetBaseClass(GetCTypeFromType(t).AsAggregateType());
             }
@@ -1162,15 +1157,13 @@ namespace Microsoft.CSharp.RuntimeBinder
 
         private void SetInterfacesOnAggregate(AggregateSymbol aggregate, Type type)
         {
-            Type[] interfaces;
-
-            if (type.GetTypeInfo().IsGenericType)
+            if (type.IsGenericType)
             {
-                type = type.GetTypeInfo().GetGenericTypeDefinition();
+                type = type.GetGenericTypeDefinition();
             }
-            interfaces = type.GetTypeInfo().ImplementedInterfaces.ToArray();
+            Type[] interfaces = type.GetTypeInfo().ImplementedInterfaces.ToArray();
 
-            // We wont be able to find the difference between Ifaces and 
+            // We won't be able to find the difference between Ifaces and 
             // IfacesAll anymore - at runtime, the class implements all of its
             // Ifaces and IfacesAll, so theres no way to differentiate.
             //
@@ -1329,17 +1322,23 @@ namespace Microsoft.CSharp.RuntimeBinder
             // we mark it as such. This is used for the CSharpIsEventBinder.
             // In the case of a WindowsRuntime event, the field will be of type
             // EventRegistrationTokenTable<delegateType>.
-            Type eventRegistrationTokenTableType;
-            if (addedField != null && addedField.GetType() != null &&
-                (addedField.GetType() == ev.type ||
-                (
-                    addedField.GetType().AssociatedSystemType.IsConstructedGenericType &&
-                    (object)(eventRegistrationTokenTableType = EventRegistrationTokenTableType) != null &&
-                    addedField.GetType().AssociatedSystemType.GetGenericTypeDefinition() == eventRegistrationTokenTableType &&
-                    addedField.GetType().AssociatedSystemType.GenericTypeArguments[0] == ev.type.AssociatedSystemType)
-                ))
+            CType addedFieldType = addedField?.GetType();
+            if (addedFieldType != null)
             {
-                addedField.isEvent = true;
+                if (addedFieldType == ev.type)
+                {
+                    addedField.isEvent = true;
+                }
+                else
+                {
+                    Type associated = addedFieldType.AssociatedSystemType;
+                    if (associated.IsConstructedGenericType
+                        && associated.GetGenericTypeDefinition() == EventRegistrationTokenTableType
+                        && associated.GenericTypeArguments[0] == ev.type.AssociatedSystemType)
+                    {
+                        addedField.isEvent = true;
+                    }
+                }
             }
 
             return ev;
@@ -1695,7 +1694,7 @@ namespace Microsoft.CSharp.RuntimeBinder
                 {
                     foreach (object o in attributes)
                     {
-                        if (o is System.ParamArrayAttribute)
+                        if (o is ParamArrayAttribute)
                         {
                             methProp.isParamArray = true;
                         }
@@ -1746,7 +1745,7 @@ namespace Microsoft.CSharp.RuntimeBinder
                 DateTimeConstantAttribute attr = (DateTimeConstantAttribute)attrs[0];
 
                 ConstValFactory factory = new ConstValFactory();
-                CONSTVAL cv = factory.Create(((System.DateTime)attr.Value).Ticks);
+                CONSTVAL cv = factory.Create(((DateTime)attr.Value).Ticks);
                 CType cvType = _semanticChecker.GetSymbolLoader().GetReqPredefType(PredefinedType.PT_DATETIME);
                 methProp.SetDefaultParameterValue(i, cvType, cv);
             }
@@ -1784,74 +1783,74 @@ namespace Microsoft.CSharp.RuntimeBinder
 #endif
                     Type defType = defValue.GetType();
 
-                    if (defType == typeof(System.Byte))
+                    if (defType == typeof(Byte))
                     {
-                        cv = factory.Create((System.Byte)defValue);
+                        cv = factory.Create((Byte)defValue);
                         cvType = _semanticChecker.GetSymbolLoader().GetReqPredefType(PredefinedType.PT_BYTE);
                     }
-                    else if (defType == typeof(System.Int16))
+                    else if (defType == typeof(Int16))
                     {
-                        cv = factory.Create((System.Int16)defValue);
+                        cv = factory.Create((Int16)defValue);
                         cvType = _semanticChecker.GetSymbolLoader().GetReqPredefType(PredefinedType.PT_SHORT);
                     }
-                    else if (defType == typeof(System.Int32))
+                    else if (defType == typeof(Int32))
                     {
-                        cv = factory.Create((System.Int32)defValue);
+                        cv = factory.Create((Int32)defValue);
                         cvType = _semanticChecker.GetSymbolLoader().GetReqPredefType(PredefinedType.PT_INT);
                     }
-                    else if (defType == typeof(System.Int64))
+                    else if (defType == typeof(Int64))
                     {
-                        cv = factory.Create((System.Int64)defValue);
+                        cv = factory.Create((Int64)defValue);
                         cvType = _semanticChecker.GetSymbolLoader().GetReqPredefType(PredefinedType.PT_LONG);
                     }
-                    else if (defType == typeof(System.Single))
+                    else if (defType == typeof(Single))
                     {
-                        cv = factory.Create((System.Single)defValue);
+                        cv = factory.Create((Single)defValue);
                         cvType = _semanticChecker.GetSymbolLoader().GetReqPredefType(PredefinedType.PT_FLOAT);
                     }
-                    else if (defType == typeof(System.Double))
+                    else if (defType == typeof(Double))
                     {
-                        cv = factory.Create((System.Double)defValue);
+                        cv = factory.Create((Double)defValue);
                         cvType = _semanticChecker.GetSymbolLoader().GetReqPredefType(PredefinedType.PT_DOUBLE);
                     }
-                    else if (defType == typeof(System.Decimal))
+                    else if (defType == typeof(Decimal))
                     {
-                        cv = factory.Create((System.Decimal)defValue);
+                        cv = factory.Create((Decimal)defValue);
                         cvType = _semanticChecker.GetSymbolLoader().GetReqPredefType(PredefinedType.PT_DECIMAL);
                     }
-                    else if (defType == typeof(System.Char))
+                    else if (defType == typeof(Char))
                     {
-                        cv = factory.Create((System.Char)defValue);
+                        cv = factory.Create((Char)defValue);
                         cvType = _semanticChecker.GetSymbolLoader().GetReqPredefType(PredefinedType.PT_CHAR);
                     }
-                    else if (defType == typeof(System.Boolean))
+                    else if (defType == typeof(Boolean))
                     {
-                        cv = factory.Create((System.Boolean)defValue);
+                        cv = factory.Create((Boolean)defValue);
                         cvType = _semanticChecker.GetSymbolLoader().GetReqPredefType(PredefinedType.PT_BOOL);
                     }
-                    else if (defType == typeof(System.SByte))
+                    else if (defType == typeof(SByte))
                     {
-                        cv = factory.Create((System.SByte)defValue);
+                        cv = factory.Create((SByte)defValue);
                         cvType = _semanticChecker.GetSymbolLoader().GetReqPredefType(PredefinedType.PT_SBYTE);
                     }
-                    else if (defType == typeof(System.UInt16))
+                    else if (defType == typeof(UInt16))
                     {
-                        cv = factory.Create((System.UInt16)defValue);
+                        cv = factory.Create((UInt16)defValue);
                         cvType = _semanticChecker.GetSymbolLoader().GetReqPredefType(PredefinedType.PT_USHORT);
                     }
-                    else if (defType == typeof(System.UInt32))
+                    else if (defType == typeof(UInt32))
                     {
-                        cv = factory.Create((System.UInt32)defValue);
+                        cv = factory.Create((UInt32)defValue);
                         cvType = _semanticChecker.GetSymbolLoader().GetReqPredefType(PredefinedType.PT_UINT);
                     }
-                    else if (defType == typeof(System.UInt64))
+                    else if (defType == typeof(UInt64))
                     {
-                        cv = factory.Create((System.UInt64)defValue);
+                        cv = factory.Create((UInt64)defValue);
                         cvType = _semanticChecker.GetSymbolLoader().GetReqPredefType(PredefinedType.PT_ULONG);
                     }
-                    else if (defType == typeof(System.String))
+                    else if (defType == typeof(String))
                     {
-                        cv = factory.Create((System.String)defValue);
+                        cv = factory.Create((String)defValue);
                         cvType = _semanticChecker.GetSymbolLoader().GetReqPredefType(PredefinedType.PT_STRING);
                     }
                     // if we fall off the end of this cascading if, we get Object/null
@@ -1921,7 +1920,7 @@ namespace Microsoft.CSharp.RuntimeBinder
         {
             Type t = p.ParameterType;
             CType ctype;
-            if (t.IsGenericParameter && t.GetTypeInfo().DeclaringMethod != null && t.GetTypeInfo().DeclaringMethod == m)
+            if (t.IsGenericParameter && t.DeclaringMethod != null && t.DeclaringMethod == m)
             {
                 // If its a method type parameter from ourselves, just find it.
                 ctype = LoadMethodTypeParameter(FindMethodFromMemberInfo(m), t);
@@ -2030,7 +2029,7 @@ namespace Microsoft.CSharp.RuntimeBinder
 
         internal void AddConversionsForType(Type type)
         {
-            for (Type t = type; t.GetTypeInfo().BaseType != null; t = t.GetTypeInfo().BaseType)
+            for (Type t = type; t.BaseType != null; t = t.BaseType)
             {
                 AddConversionsForOneType(t);
             }
@@ -2040,9 +2039,9 @@ namespace Microsoft.CSharp.RuntimeBinder
 
         private void AddConversionsForOneType(Type type)
         {
-            if (type.GetTypeInfo().IsGenericType)
+            if (type.IsGenericType)
             {
-                type = type.GetTypeInfo().GetGenericTypeDefinition();
+                type = type.GetGenericTypeDefinition();
             }
 
             if (_typesWithConversionsLoaded.Contains(type))

@@ -32,19 +32,15 @@ namespace System.IO.Tests
             Assert.Throws<ArgumentException>(() => Create(string.Empty));
         }
 
-        [Fact]
-        public void PathWithInvalidCharactersAsPath_ThrowsArgumentException()
+        [Theory, MemberData(nameof(PathsWithInvalidCharacters))]
+        public void PathWithInvalidCharactersAsPath_ThrowsArgumentException(string invalidPath)
         {
-            var paths = IOInputs.GetPathsWithInvalidCharacters();
-            Assert.All(paths, (path) =>
-            {
-                if (path.Equals(@"\\?\"))
-                    Assert.Throws<IOException>(() => Create(path));
-                else if (path.Contains(@"\\?\"))
-                    Assert.Throws<DirectoryNotFoundException>(() => Create(path));
-                else
-                    Assert.Throws<ArgumentException>(() => Create(path));
-            });
+            if (invalidPath.Equals(@"\\?\") && !PathFeatures.IsUsingLegacyPathNormalization())
+                Assert.Throws<IOException>(() => Create(invalidPath));
+            else if (invalidPath.Contains(@"\\?\") && !PathFeatures.IsUsingLegacyPathNormalization())
+                Assert.Throws<DirectoryNotFoundException>(() => Create(invalidPath));
+            else
+                Assert.Throws<ArgumentException>(() => Create(invalidPath));
         }
 
         [Fact]
@@ -130,8 +126,9 @@ namespace System.IO.Tests
             });
         }
 
-        [Fact]
-        [PlatformSpecific(PlatformID.Windows)]
+        [ConditionalFact(nameof(UsingNewNormalization))]
+        [SkipOnTargetFramework(Tfm.BelowNet462 | Tfm.Core50, "long path support added in 4.6.2")]
+        [PlatformSpecific(TestPlatforms.Windows)]  // trailing slash
         public void ValidExtendedPathWithTrailingSlash()
         {
             DirectoryInfo testDir = Directory.CreateDirectory(GetTestFilePath());
@@ -223,19 +220,18 @@ namespace System.IO.Tests
 
         #region PlatformSpecific
 
-        [Fact]
-        [PlatformSpecific(PlatformID.Windows)]
-        public void PathWithInvalidColons_ThrowsNotSupportedException()
+        // This is updated to be correct, need to update CoreCLR path code so this will pass on all platforms
+        [ActiveIssue(15098)]
+        [Theory, MemberData(nameof(PathsWithInvalidColons))]
+        [PlatformSpecific(TestPlatforms.Windows)]  // invalid colons throws ArgumentException
+        public void PathWithInvalidColons_ThrowsArgumentException(string invalidPath)
         {
-            var paths = IOInputs.GetPathsWithInvalidColons();
-            Assert.All(paths, (path) =>
-            {
-                Assert.Throws<NotSupportedException>(() => Create(path));
-            });
+            Assert.Throws<ArgumentException>(() => Create(invalidPath));
         }
 
-        [Fact]
-        [PlatformSpecific(PlatformID.Windows)]
+        [ConditionalFact(nameof(AreAllLongPathsAvailable))]
+        [SkipOnTargetFramework(Tfm.BelowNet462 | Tfm.Core50, "long path support added in 4.6.2")]
+        [PlatformSpecific(TestPlatforms.Windows)]  // long directory path succeeds
         public void DirectoryLongerThanMaxPath_Succeeds()
         {
             var paths = IOInputs.GetPathsLongerThanMaxPath(GetTestFilePath());
@@ -247,7 +243,8 @@ namespace System.IO.Tests
         }
 
         [Fact]
-        [PlatformSpecific(PlatformID.Windows)]
+        [ActiveIssue(11687)]
+        [PlatformSpecific(TestPlatforms.Windows)]  // long directory path throws PathTooLongException
         public void DirectoryLongerThanMaxLongPath_ThrowsPathTooLongException()
         {
             var paths = IOInputs.GetPathsLongerThanMaxLongPath(GetTestFilePath());
@@ -257,8 +254,9 @@ namespace System.IO.Tests
             });
         }
 
-        [Fact]
-        [PlatformSpecific(PlatformID.Windows)]
+        [ConditionalFact(nameof(LongPathsAreNotBlocked), nameof(UsingNewNormalization))]
+        [SkipOnTargetFramework(Tfm.BelowNet462 | Tfm.Core50, "long path support added in 4.6.2")]
+        [PlatformSpecific(TestPlatforms.Windows)]  // long directory path with extended syntax throws PathTooLongException
         public void DirectoryLongerThanMaxLongPathWithExtendedSyntax_ThrowsPathTooLongException()
         {
             var paths = IOInputs.GetPathsLongerThanMaxLongPath(GetTestFilePath(), useExtendedSyntax: true);
@@ -268,9 +266,9 @@ namespace System.IO.Tests
             });
         }
 
-
-        [Fact]
-        [PlatformSpecific(PlatformID.Windows)]
+        [ConditionalFact(nameof(LongPathsAreNotBlocked), nameof(UsingNewNormalization))]
+        [SkipOnTargetFramework(Tfm.BelowNet462 | Tfm.Core50, "long path support added in 4.6.2")]
+        [PlatformSpecific(TestPlatforms.Windows)]  // long directory path with extended syntax succeeds
         public void ExtendedDirectoryLongerThanLegacyMaxPath_Succeeds()
         {
             var paths = IOInputs.GetPathsLongerThanMaxPath(GetTestFilePath(), useExtendedSyntax: true);
@@ -280,8 +278,9 @@ namespace System.IO.Tests
             });
         }
 
-        [Fact]
-        [PlatformSpecific(PlatformID.Windows)]
+        [ConditionalFact(nameof(AreAllLongPathsAvailable))]
+        [SkipOnTargetFramework(Tfm.BelowNet462 | Tfm.Core50, "long path support added in 4.6.2")]
+        [PlatformSpecific(TestPlatforms.Windows)]  // long directory path succeeds
         public void DirectoryLongerThanMaxDirectoryAsPath_Succeeds()
         {
             var paths = IOInputs.GetPathsLongerThanMaxDirectory(GetTestFilePath());
@@ -293,7 +292,7 @@ namespace System.IO.Tests
         }
 
         [Fact]
-        [PlatformSpecific(PlatformID.AnyUnix)]
+        [PlatformSpecific(TestPlatforms.AnyUnix)] // long directory path allowed
         public void UnixPathLongerThan256_Allowed()
         {
             DirectoryInfo testDir = Create(GetTestFilePath());
@@ -304,7 +303,7 @@ namespace System.IO.Tests
         }
 
         [Fact]
-        [PlatformSpecific(PlatformID.AnyUnix)]
+        [PlatformSpecific(TestPlatforms.AnyUnix)]  // deeply nested directories allowed
         public void UnixPathWithDeeplyNestedDirectories()
         {
             DirectoryInfo parent = Create(GetTestFilePath());
@@ -316,7 +315,7 @@ namespace System.IO.Tests
         }
 
         [Fact]
-        [PlatformSpecific(PlatformID.Windows)]
+        [PlatformSpecific(TestPlatforms.Windows)]  // whitespace as path throws ArgumentException on Windows
         public void WindowsWhiteSpaceAsPath_ThrowsArgumentException()
         {
             var paths = IOInputs.GetWhiteSpace();
@@ -327,7 +326,7 @@ namespace System.IO.Tests
         }
 
         [Fact]
-        [PlatformSpecific(PlatformID.AnyUnix)]
+        [PlatformSpecific(TestPlatforms.AnyUnix)]  // whitespace as path allowed
         public void UnixWhiteSpaceAsPath_Allowed()
         {
             var paths = IOInputs.GetWhiteSpace();
@@ -339,7 +338,7 @@ namespace System.IO.Tests
         }
 
         [Fact]
-        [PlatformSpecific(PlatformID.Windows)]
+        [PlatformSpecific(TestPlatforms.Windows)]  // trailing whitespace in path is removed on Windows
         public void WindowsTrailingWhiteSpace()
         {
             // Windows will remove all non-significant whitespace in a path
@@ -356,8 +355,9 @@ namespace System.IO.Tests
             });
         }
 
-        [Fact]
-        [PlatformSpecific(PlatformID.Windows)]
+        [ConditionalFact(nameof(UsingNewNormalization))]
+        [SkipOnTargetFramework(Tfm.BelowNet462 | Tfm.Core50, "long path support added in 4.6.2")]
+        [PlatformSpecific(TestPlatforms.Windows)]  // extended syntax with whitespace
         public void WindowsExtendedSyntaxWhiteSpace()
         {
             var paths = IOInputs.GetSimpleWhiteSpace();
@@ -373,7 +373,7 @@ namespace System.IO.Tests
         }
 
         [Fact]
-        [PlatformSpecific(PlatformID.AnyUnix)]
+        [PlatformSpecific(TestPlatforms.AnyUnix)]  // trailing whitespace in path treated as significant on Unix
         public void UnixNonSignificantTrailingWhiteSpace()
         {
             // Unix treats trailing/prename whitespace as significant and a part of the name.
@@ -391,7 +391,7 @@ namespace System.IO.Tests
         }
 
         [Fact]
-        [PlatformSpecific(PlatformID.Windows)] // alternate data streams
+        [PlatformSpecific(TestPlatforms.Windows)] // alternate data streams
         public void PathWithAlternateDataStreams_ThrowsNotSupportedException()
         {
             var paths = IOInputs.GetPathsWithAlternativeDataStreams();
@@ -402,7 +402,7 @@ namespace System.IO.Tests
         }
 
         [Fact]
-        [PlatformSpecific(PlatformID.Windows)] // device name prefixes
+        [PlatformSpecific(TestPlatforms.Windows)] // device name prefixes
         public void PathWithReservedDeviceNameAsPath_ThrowsDirectoryNotFoundException()
         {   // Throws DirectoryNotFoundException, when the behavior really should be an invalid path
             var paths = IOInputs.GetPathsWithReservedDeviceNames();
@@ -412,8 +412,9 @@ namespace System.IO.Tests
             });
         }
 
-        [Fact]
-        [PlatformSpecific(PlatformID.Windows)] // device name prefixes
+        [ConditionalFact(nameof(UsingNewNormalization))]
+        [SkipOnTargetFramework(Tfm.BelowNet462 | Tfm.Core50, "long path support added in 4.6.2")]
+        [PlatformSpecific(TestPlatforms.Windows)] // device name prefixes
         public void PathWithReservedDeviceNameAsExtendedPath()
         {
             var paths = IOInputs.GetReservedDeviceNames();
@@ -427,7 +428,7 @@ namespace System.IO.Tests
         }
 
         [Fact]
-        [PlatformSpecific(PlatformID.Windows)] // UNC shares
+        [PlatformSpecific(TestPlatforms.Windows)] // UNC shares
         public void UncPathWithoutShareNameAsPath_ThrowsArgumentException()
         {
             var paths = IOInputs.GetUncPathsWithoutShareName();
@@ -438,14 +439,14 @@ namespace System.IO.Tests
         }
 
         [Fact]
-        [PlatformSpecific(PlatformID.Windows)] // UNC shares
+        [PlatformSpecific(TestPlatforms.Windows)] // UNC shares
         public void UNCPathWithOnlySlashes()
         {
             Assert.Throws<ArgumentException>(() => Create("//"));
         }
 
         [Fact]
-        [PlatformSpecific(PlatformID.Windows)] // drive labels
+        [PlatformSpecific(TestPlatforms.Windows)] // drive labels
         public void CDriveCase()
         {
             DirectoryInfo dir = Create("c:\\");
@@ -454,7 +455,7 @@ namespace System.IO.Tests
         }
 
         [Fact]
-        [PlatformSpecific(PlatformID.Windows)]
+        [PlatformSpecific(TestPlatforms.Windows)]  // drive letters
         public void DriveLetter_Windows()
         {
             // On Windows, DirectoryInfo will replace "<DriveLetter>:" with "."
@@ -465,11 +466,21 @@ namespace System.IO.Tests
         }
 
         [Fact]
-        [PlatformSpecific(PlatformID.AnyUnix)]
+        [PlatformSpecific(TestPlatforms.AnyUnix)]  // drive letters casing
         public void DriveLetter_Unix()
         {
-            // On Unix, there's no special casing for drive letters, which are valid file names
-            var driveLetter = Create("C:");
+            // On Unix, there's no special casing for drive letters.  These may or may not be valid names, depending
+            // on the file system underlying the current directory.  Unix file systems typically allow these, but,
+            // for example, these names are not allowed if running on a file system mounted from a Windows machine.
+            DirectoryInfo driveLetter;
+            try
+            {
+                driveLetter = Create("C:");
+            }
+            catch (IOException)
+            {
+                return;
+            }
             var current = Create(".");
             Assert.Equal("C:", driveLetter.Name);
             Assert.Equal(Path.Combine(current.FullName, "C:"), driveLetter.FullName);
@@ -484,7 +495,7 @@ namespace System.IO.Tests
         }
 
         [Fact]
-        [PlatformSpecific(PlatformID.Windows)] // testing drive labels
+        [PlatformSpecific(TestPlatforms.Windows)] // testing drive labels
         public void NonExistentDriveAsPath_ThrowsDirectoryNotFoundException()
         {
             Assert.Throws<DirectoryNotFoundException>(() =>
@@ -494,7 +505,7 @@ namespace System.IO.Tests
         }
 
         [Fact]
-        [PlatformSpecific(PlatformID.Windows)] // testing drive labels
+        [PlatformSpecific(TestPlatforms.Windows)] // testing drive labels
         public void SubdirectoryOnNonExistentDriveAsPath_ThrowsDirectoryNotFoundException()
         {
             Assert.Throws<DirectoryNotFoundException>(() =>
@@ -505,7 +516,7 @@ namespace System.IO.Tests
 
         [Fact]
         [ActiveIssue(1221)]
-        [PlatformSpecific(PlatformID.Windows)] // testing drive labels
+        [PlatformSpecific(TestPlatforms.Windows)] // testing drive labels
         public void NotReadyDriveAsPath_ThrowsDirectoryNotFoundException()
         {   // Behavior is suspect, should really have thrown IOException similar to the SubDirectory case
             var drive = IOServices.GetNotReadyDrive();
@@ -522,7 +533,7 @@ namespace System.IO.Tests
         }
 
         [Fact]
-        [PlatformSpecific(PlatformID.Windows)] // testing drive labels
+        [PlatformSpecific(TestPlatforms.Windows)] // testing drive labels
         [ActiveIssue(1221)]
         public void SubdirectoryOnNotReadyDriveAsPath_ThrowsIOException()
         {
@@ -543,7 +554,6 @@ namespace System.IO.Tests
 #if !TEST_WINRT // Cannot set current directory to root from appcontainer with it's default ACL
         /*
         [Fact]
-        [ActiveIssue(1220)] // SetCurrentDirectory
         public void DotDotAsPath_WhenCurrentDirectoryIsRoot_DoesNotThrow()
         {
             string root = Path.GetPathRoot(Directory.GetCurrentDirectory());

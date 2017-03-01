@@ -17,6 +17,9 @@
 #include <sys/wait.h>
 #include <syslog.h>
 #include <unistd.h>
+#if HAVE_CRT_EXTERNS_H
+#include <crt_externs.h>
+#endif
 #if HAVE_PIPE2
 #include <fcntl.h>
 #endif
@@ -456,7 +459,7 @@ extern "C" int64_t SystemNative_GetMaximumPath()
 
 extern "C" int32_t SystemNative_GetPriority(PriorityWhich which, int32_t who)
 {
-    // GetPriority uses errno 0 to show succes to make sure we don't have a stale value
+    // GetPriority uses errno 0 to show success to make sure we don't have a stale value
     errno = 0;
 #if PRIORITY_REQUIRES_INT_WHO
     return getpriority(which, who);
@@ -542,3 +545,13 @@ extern "C" int32_t SystemNative_SchedGetAffinity(int32_t pid, intptr_t* mask)
     return result;
 }
 #endif
+
+extern "C" char** SystemNative_GetEnviron()
+{
+#if HAVE_NSGETENVIRON
+    return *(_NSGetEnviron());
+#else
+    extern char **environ;
+    return environ;
+#endif
+}

@@ -12,12 +12,13 @@
 using Microsoft.Win32;
 using System;
 using System.Collections;
-using System.Security.Principal;
+using System.Diagnostics;
+using System.Diagnostics.Contracts;
+using System.Globalization;
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
+using System.Security.Principal;
 using FileNotFoundException = System.IO.FileNotFoundException;
-using System.Globalization;
-using System.Diagnostics.Contracts;
 
 namespace System.Security.AccessControl
 {
@@ -39,7 +40,7 @@ namespace System.Security.AccessControl
 
         #region Delegates
 
-        internal protected delegate System.Exception ExceptionFromErrorCode(int errorCode, string name, SafeHandle handle, object context);
+        protected internal delegate System.Exception ExceptionFromErrorCode(int errorCode, string name, SafeHandle handle, object context);
 
         #endregion
 
@@ -110,7 +111,7 @@ namespace System.Security.AccessControl
 
             error = Win32.GetSecurityInfo(resourceType, name, handle, includeSections, out rawSD);
 
-            if (error != Interop.mincore.Errors.ERROR_SUCCESS)
+            if (error != Interop.Errors.ERROR_SUCCESS)
             {
                 System.Exception exception = null;
 
@@ -121,39 +122,39 @@ namespace System.Security.AccessControl
 
                 if (exception == null)
                 {
-                    if (error == Interop.mincore.Errors.ERROR_ACCESS_DENIED)
+                    if (error == Interop.Errors.ERROR_ACCESS_DENIED)
                     {
                         exception = new UnauthorizedAccessException();
                     }
-                    else if (error == Interop.mincore.Errors.ERROR_INVALID_OWNER)
+                    else if (error == Interop.Errors.ERROR_INVALID_OWNER)
                     {
                         exception = new InvalidOperationException(SR.AccessControl_InvalidOwner);
                     }
-                    else if (error == Interop.mincore.Errors.ERROR_INVALID_PRIMARY_GROUP)
+                    else if (error == Interop.Errors.ERROR_INVALID_PRIMARY_GROUP)
                     {
                         exception = new InvalidOperationException(SR.AccessControl_InvalidGroup);
                     }
-                    else if (error == Interop.mincore.Errors.ERROR_INVALID_PARAMETER)
+                    else if (error == Interop.Errors.ERROR_INVALID_PARAMETER)
                     {
                         exception = new InvalidOperationException(SR.Format(SR.AccessControl_UnexpectedError, error));
                     }
-                    else if (error == Interop.mincore.Errors.ERROR_INVALID_NAME)
+                    else if (error == Interop.Errors.ERROR_INVALID_NAME)
                     {
                         exception = new ArgumentException(
                              SR.Argument_InvalidName,
 nameof(name));
                     }
-                    else if (error == Interop.mincore.Errors.ERROR_FILE_NOT_FOUND)
+                    else if (error == Interop.Errors.ERROR_FILE_NOT_FOUND)
                     {
                         exception = (name == null ? new FileNotFoundException() : new FileNotFoundException(name));
                     }
-                    else if (error == Interop.mincore.Errors.ERROR_NO_SECURITY_ON_OBJECT)
+                    else if (error == Interop.Errors.ERROR_NO_SECURITY_ON_OBJECT)
                     {
                         exception = new NotSupportedException(SR.AccessControl_NoAssociatedSecurity);
                     }
                     else
                     {
-                        Contract.Assert(false, string.Format(CultureInfo.InvariantCulture, "Win32GetSecurityInfo() failed with unexpected error code {0}", error));
+                        Debug.Assert(false, string.Format(CultureInfo.InvariantCulture, "Win32GetSecurityInfo() failed with unexpected error code {0}", error));
                         exception = new InvalidOperationException(SR.Format(SR.AccessControl_UnexpectedError, error));
                     }
                 }
@@ -233,7 +234,7 @@ nameof(name));
 
                     if ((_securityDescriptor.ControlFlags & ControlFlags.DiscretionaryAclProtected) != 0)
                     {
-                        securityInfo = (SecurityInfos)((uint)securityInfo | ProtectedDiscretionaryAcl);
+                        securityInfo = unchecked((SecurityInfos)((uint)securityInfo | ProtectedDiscretionaryAcl));
                     }
                     else
                     {
@@ -252,7 +253,7 @@ nameof(name));
 
                 error = Win32.SetSecurityInfo(_resourceType, name, handle, securityInfo, owner, group, sacl, dacl);
 
-                if (error != Interop.mincore.Errors.ERROR_SUCCESS)
+                if (error != Interop.Errors.ERROR_SUCCESS)
                 {
                     System.Exception exception = null;
 
@@ -263,39 +264,39 @@ nameof(name));
 
                     if (exception == null)
                     {
-                        if (error == Interop.mincore.Errors.ERROR_ACCESS_DENIED)
+                        if (error == Interop.Errors.ERROR_ACCESS_DENIED)
                         {
                             exception = new UnauthorizedAccessException();
                         }
-                        else if (error == Interop.mincore.Errors.ERROR_INVALID_OWNER)
+                        else if (error == Interop.Errors.ERROR_INVALID_OWNER)
                         {
                             exception = new InvalidOperationException(SR.AccessControl_InvalidOwner);
                         }
-                        else if (error == Interop.mincore.Errors.ERROR_INVALID_PRIMARY_GROUP)
+                        else if (error == Interop.Errors.ERROR_INVALID_PRIMARY_GROUP)
                         {
                             exception = new InvalidOperationException(SR.AccessControl_InvalidGroup);
                         }
-                        else if (error == Interop.mincore.Errors.ERROR_INVALID_NAME)
+                        else if (error == Interop.Errors.ERROR_INVALID_NAME)
                         {
                             exception = new ArgumentException(
                                  SR.Argument_InvalidName,
 nameof(name));
                         }
-                        else if (error == Interop.mincore.Errors.ERROR_INVALID_HANDLE)
+                        else if (error == Interop.Errors.ERROR_INVALID_HANDLE)
                         {
                             exception = new NotSupportedException(SR.AccessControl_InvalidHandle);
                         }
-                        else if (error == Interop.mincore.Errors.ERROR_FILE_NOT_FOUND)
+                        else if (error == Interop.Errors.ERROR_FILE_NOT_FOUND)
                         {
                             exception = new FileNotFoundException();
                         }
-                        else if (error == Interop.mincore.Errors.ERROR_NO_SECURITY_ON_OBJECT)
+                        else if (error == Interop.Errors.ERROR_NO_SECURITY_ON_OBJECT)
                         {
                             exception = new NotSupportedException(SR.AccessControl_NoAssociatedSecurity);
                         }
                         else
                         {
-                            Contract.Assert(false, string.Format(CultureInfo.InvariantCulture, "Unexpected error code {0}", error));
+                            Debug.Assert(false, string.Format(CultureInfo.InvariantCulture, "Unexpected error code {0}", error));
                             exception = new InvalidOperationException(SR.Format(SR.AccessControl_UnexpectedError, error));
                         }
                     }

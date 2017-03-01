@@ -2,7 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for more information.
 
-using System;
+using System.Collections.Generic;
 using Xunit;
 
 namespace System.Linq.Expressions.Tests
@@ -1556,5 +1556,57 @@ namespace System.Linq.Expressions.Tests
         }
 
         #endregion
+
+        #region ToString
+
+        [Fact]
+        public static void ToStringTest()
+        {
+            UnaryExpression e = Expression.ArrayLength(Expression.Parameter(typeof(int[]), "xs"));
+            Assert.Equal("ArrayLength(xs)", e.ToString());
+        }
+
+        #endregion
+
+        [Fact]
+        public static void NullArray()
+        {
+            Assert.Throws<ArgumentNullException>("array", () => Expression.ArrayLength(null));
+        }
+
+        [Fact]
+        public static void IsNotArray()
+        {
+            Expression notArray = Expression.Constant(8);
+            Assert.Throws<ArgumentException>("array", () => Expression.ArrayLength(notArray));
+        }
+
+        [Theory, ClassData(typeof(CompilationTypes))]
+        public static void ArrayTypeArrayAllowed(bool useInterpreter)
+        {
+            Array arr = new[] {1, 2, 3};
+            Func<int> func =
+                Expression.Lambda<Func<int>>(Expression.ArrayLength(Expression.Constant(arr))).Compile(useInterpreter);
+            Assert.Equal(3, func());
+        }
+
+        [Fact]
+        public static void UnreadableArray()
+        {
+            Expression array = Expression.Property(null, typeof(Unreadable<int[]>), nameof(Unreadable<int>.WriteOnly));
+            Assert.Throws<ArgumentException>(() => Expression.ArrayLength(array));
+        }
+
+        private static IEnumerable<object[]> TestArrays()
+            => Enumerable.Range(0, 6).Select(i => new object[] {new int[i * i]});
+
+        [Theory, PerCompilationType(nameof(TestArrays))]
+        public static void MakeUnaryArrayLength(int[] array, bool useInterpreter)
+        {
+            Expression<Func<int>> lambda = Expression.Lambda<Func<int>>(
+                Expression.MakeUnary(ExpressionType.ArrayLength, Expression.Constant(array), null));
+            Func<int> func = lambda.Compile(useInterpreter);
+            Assert.Equal(array.Length, func());
+        }
     }
 }

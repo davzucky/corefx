@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for more information.
 
-using System;
 using Xunit;
 
 namespace System.Linq.Expressions.Tests
@@ -266,6 +265,19 @@ namespace System.Linq.Expressions.Tests
         {
             Expression value = Expression.Property(null, typeof(Unreadable<int>), "WriteOnly");
             Assert.Throws<ArgumentException>("right", () => Expression.Or(Expression.Constant(1), value));
+        }
+
+        [Fact]
+        public static void ToStringTest()
+        {
+            BinaryExpression e1 = Expression.Or(Expression.Parameter(typeof(int), "a"), Expression.Parameter(typeof(int), "b"));
+            Assert.Equal("(a | b)", e1.ToString());
+
+            BinaryExpression e2 = Expression.Or(Expression.Parameter(typeof(bool), "a"), Expression.Parameter(typeof(bool), "b"));
+            Assert.Equal("(a Or b)", e2.ToString());
+
+            BinaryExpression e3 = Expression.Or(Expression.Parameter(typeof(bool?), "a"), Expression.Parameter(typeof(bool?), "b"));
+            Assert.Equal("(a Or b)", e3.ToString());
         }
     }
 }

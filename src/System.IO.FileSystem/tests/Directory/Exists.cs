@@ -53,17 +53,14 @@ namespace System.IO.Tests
             });
         }
 
-        [Fact]
-        public void PathWithInvalidCharactersAsPath_ReturnsFalse()
+        [Theory, MemberData(nameof(PathsWithInvalidCharacters))]
+        public void PathWithInvalidCharactersAsPath_ReturnsFalse(string invalidPath)
         {
             // Checks that errors aren't thrown when calling Exists() on paths with impossible to create characters
             char[] trimmed = { (char)0x9, (char)0xA, (char)0xB, (char)0xC, (char)0xD, (char)0x20, (char)0x85, (char)0xA0 };
-            Assert.All((IOInputs.GetPathsWithInvalidCharacters()), (component) =>
-            {
-                Assert.False(Exists(component));
-                if (!trimmed.Contains(component.ToCharArray()[0]))
-                    Assert.False(Exists(TestDirectory + Path.DirectorySeparatorChar + component));
-            });
+            Assert.False(Exists(invalidPath));
+            if (!trimmed.Contains(invalidPath.ToCharArray()[0]))
+                Assert.False(Exists(TestDirectory + Path.DirectorySeparatorChar + invalidPath));
         }
 
         [Fact]
@@ -179,8 +176,9 @@ namespace System.IO.Tests
 
         #region PlatformSpecific
 
-        [Fact]
-        [PlatformSpecific(PlatformID.Windows)]
+        [ConditionalFact(nameof(UsingNewNormalization))]
+        [SkipOnTargetFramework(Tfm.BelowNet462 | Tfm.Core50, "long path support added in 4.6.2")]
+        [PlatformSpecific(TestPlatforms.Windows)]  // Extended path exists
         public void ValidExtendedPathExists_ReturnsTrue()
         {
             Assert.All((IOInputs.GetValidPathComponentNames()), (component) =>
@@ -191,8 +189,9 @@ namespace System.IO.Tests
             });
         }
 
-        [Fact]
-        [PlatformSpecific(PlatformID.Windows)]
+        [ConditionalFact(nameof(UsingNewNormalization))]
+        [SkipOnTargetFramework(Tfm.BelowNet462 | Tfm.Core50, "long path support added in 4.6.2")]
+        [PlatformSpecific(TestPlatforms.Windows)]  // Extended path already exists as file
         public void ExtendedPathAlreadyExistsAsFile()
         {
             string path = IOInputs.ExtendedPrefix + GetTestFilePath();
@@ -203,8 +202,9 @@ namespace System.IO.Tests
             Assert.False(Exists(IOServices.RemoveTrailingSlash(IOServices.AddTrailingSlashIfNeeded(path))));
         }
 
-        [Fact]
-        [PlatformSpecific(PlatformID.Windows)]
+        [ConditionalFact(nameof(UsingNewNormalization))]
+        [SkipOnTargetFramework(Tfm.BelowNet462 | Tfm.Core50, "long path support added in 4.6.2")]
+        [PlatformSpecific(TestPlatforms.Windows)]  // Extended path already exists as directory
         public void ExtendedPathAlreadyExistsAsDirectory()
         {
             string path = IOInputs.ExtendedPrefix + GetTestFilePath();
@@ -215,8 +215,9 @@ namespace System.IO.Tests
             Assert.True(Exists(IOServices.RemoveTrailingSlash(IOServices.AddTrailingSlashIfNeeded(path))));
         }
 
-        [Fact]
-        [PlatformSpecific(PlatformID.Windows)]
+        [ConditionalFact(nameof(AreAllLongPathsAvailable))]
+        [SkipOnTargetFramework(Tfm.BelowNet462 | Tfm.Core50, "long path support added in 4.6.2")]
+        [PlatformSpecific(TestPlatforms.Windows)]  // Long directory path doesn't throw on Exists
         public void DirectoryLongerThanMaxDirectoryAsPath_DoesntThrow()
         {
             Assert.All((IOInputs.GetPathsLongerThanMaxDirectory(GetTestFilePath())), (path) =>
@@ -226,7 +227,7 @@ namespace System.IO.Tests
         }
 
         [Fact]
-        [PlatformSpecific(PlatformID.Windows)] // Unix equivalent tested already in CreateDirectory
+        [PlatformSpecific(TestPlatforms.Windows)] // Unix equivalent tested already in CreateDirectory
         public void WindowsWhiteSpaceAsPath_ReturnsFalse()
         {
             // Checks that errors aren't thrown when calling Exists() on impossible paths
@@ -256,10 +257,13 @@ namespace System.IO.Tests
             Assert.False(Exists(testDir.FullName.ToLowerInvariant()));
         }
 
-        [Fact]
-        [PlatformSpecific(PlatformID.Windows)] // In Windows, trailing whitespace in a path is trimmed appropriately
+        [ConditionalFact(nameof(UsingNewNormalization))]
+        [SkipOnTargetFramework(Tfm.BelowNet462 | Tfm.Core50, "long path support added in 4.6.2")]
+        [PlatformSpecific(TestPlatforms.Windows)] // In Windows, trailing whitespace in a path is trimmed appropriately
         public void TrailingWhitespaceExistence()
         {
+            // This test relies on \\?\ support
+
             DirectoryInfo testDir = Directory.CreateDirectory(GetTestFilePath());
             Assert.All(IOInputs.GetWhiteSpace(), (component) =>
             {
@@ -278,7 +282,7 @@ namespace System.IO.Tests
         }
 
         [Fact]
-        [PlatformSpecific(PlatformID.Windows)] // alternate data stream
+        [PlatformSpecific(TestPlatforms.Windows)] // alternate data stream
         public void PathWithAlternateDataStreams_ReturnsFalse()
         {
             Assert.All(IOInputs.GetWhiteSpace(), (component) =>
@@ -289,7 +293,7 @@ namespace System.IO.Tests
 
         [Fact]
         [OuterLoop]
-        [PlatformSpecific(PlatformID.Windows)] // device names
+        [PlatformSpecific(TestPlatforms.Windows)] // device names
         public void PathWithReservedDeviceNameAsPath_ReturnsFalse()
         {
             Assert.All((IOInputs.GetPathsWithReservedDeviceNames()), (component) =>
@@ -299,7 +303,7 @@ namespace System.IO.Tests
         }
 
         [Fact]
-        [PlatformSpecific(PlatformID.Windows)] // UNC paths
+        [PlatformSpecific(TestPlatforms.Windows)] // UNC paths
         public void UncPathWithoutShareNameAsPath_ReturnsFalse()
         {
             Assert.All((IOInputs.GetUncPathsWithoutShareName()), (component) =>
@@ -309,7 +313,7 @@ namespace System.IO.Tests
         }
 
         [Fact]
-        [PlatformSpecific(PlatformID.Windows)] // max directory length not fixed on Unix
+        [PlatformSpecific(TestPlatforms.Windows)] // max directory length not fixed on Unix
         public void DirectoryEqualToMaxDirectory_ReturnsTrue()
         {
             // Creates directories up to the maximum directory length all at once
@@ -320,7 +324,7 @@ namespace System.IO.Tests
         }
 
         [Fact]
-        [PlatformSpecific(PlatformID.Windows)] // max directory length not fixed on Unix
+        [PlatformSpecific(TestPlatforms.Windows)] // max directory length not fixed on Unix
         public void DirectoryWithComponentLongerThanMaxComponentAsPath_ReturnsFalse()
         {
             Assert.All((IOInputs.GetPathsWithComponentLongerThanMaxComponent()), (component) =>
@@ -331,7 +335,7 @@ namespace System.IO.Tests
 
         [Fact]
         [ActiveIssue(1221)]
-        [PlatformSpecific(PlatformID.Windows)] // drive labels
+        [PlatformSpecific(TestPlatforms.Windows)] // drive labels
         public void NotReadyDriveAsPath_ReturnsFalse()
         {
             var drive = IOServices.GetNotReadyDrive();
@@ -348,7 +352,7 @@ namespace System.IO.Tests
 
         [Fact]
         [ActiveIssue(1221)]
-        [PlatformSpecific(PlatformID.Windows)] // drive labels
+        [PlatformSpecific(TestPlatforms.Windows)] // drive labels
         public void SubdirectoryOnNotReadyDriveAsPath_ReturnsFalse()
         {
             var drive = IOServices.GetNotReadyDrive();
@@ -364,21 +368,21 @@ namespace System.IO.Tests
         }
 
         [Fact]
-        [PlatformSpecific(PlatformID.Windows)] // drive labels
+        [PlatformSpecific(TestPlatforms.Windows)] // drive labels
         public void NonExistentDriveAsPath_ReturnsFalse()
         {
             Assert.False(Exists(IOServices.GetNonExistentDrive()));
         }
 
         [Fact]
-        [PlatformSpecific(PlatformID.Windows)] // drive labels
+        [PlatformSpecific(TestPlatforms.Windows)] // drive labels
         public void SubdirectoryOnNonExistentDriveAsPath_ReturnsFalse()
         {
             Assert.False(Exists(Path.Combine(IOServices.GetNonExistentDrive(), "nonexistentsubdir")));
         }
 
         [Fact]
-        [PlatformSpecific(PlatformID.AnyUnix)]
+        [PlatformSpecific(TestPlatforms.AnyUnix)]  // Makes call to native code (libc)
         public void FalseForNonRegularFile()
         {
             string fileName = GetTestFilePath();

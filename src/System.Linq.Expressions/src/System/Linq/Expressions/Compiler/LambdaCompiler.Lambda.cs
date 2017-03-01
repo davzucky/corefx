@@ -7,7 +7,7 @@ using System.Dynamic.Utils;
 using System.Reflection;
 using System.Reflection.Emit;
 using System.Runtime.CompilerServices;
-using System.Threading;
+using static System.Linq.Expressions.CachedReflectionInfo;
 
 namespace System.Linq.Expressions.Compiler
 {
@@ -17,16 +17,23 @@ namespace System.Linq.Expressions.Compiler
     /// </summary>
     internal partial class LambdaCompiler
     {
+#if FEATURE_COMPILE_TO_METHODBUILDER
         private static int s_counter;
+#endif
 
         internal void EmitConstantArray<T>(T[] array)
         {
+#if FEATURE_COMPILE_TO_METHODBUILDER
             // Emit as runtime constant if possible
             // if not, emit into IL
             if (_method is DynamicMethod)
+#else
+            Debug.Assert(_method is DynamicMethod);
+#endif
             {
                 EmitConstant(array, typeof(T[]));
             }
+#if FEATURE_COMPILE_TO_METHODBUILDER
             else if (_typeBuilder != null)
             {
                 // store into field in our type builder, we will initialize
@@ -36,15 +43,16 @@ namespace System.Linq.Expressions.Compiler
                 _ilg.Emit(OpCodes.Ldsfld, fb);
                 _ilg.Emit(OpCodes.Ldnull);
                 _ilg.Emit(OpCodes.Bne_Un, l);
-                _ilg.EmitArray(array);
+                _ilg.EmitArray(array, this);
                 _ilg.Emit(OpCodes.Stsfld, fb);
                 _ilg.MarkLabel(l);
                 _ilg.Emit(OpCodes.Ldsfld, fb);
             }
             else
             {
-                _ilg.EmitArray(array);
+                _ilg.EmitArray(array, this);
             }
+#endif
         }
 
         private void EmitClosureCreation(LambdaCompiler inner)
@@ -75,12 +83,12 @@ namespace System.Linq.Expressions.Compiler
             {
                 _ilg.EmitNull();
             }
-            _ilg.EmitNew(typeof(Closure).GetConstructor(new Type[] { typeof(object[]), typeof(object[]) }));
+            _ilg.EmitNew(Closure_ObjectArray_ObjectArray);
         }
 
         /// <summary>
         /// Emits code which creates new instance of the delegateType delegate.
-        /// 
+        ///
         /// Since the delegate is getting closed over the "Closure" argument, this
         /// cannot be used with virtual/instance methods (inner must be static method)
         /// </summary>
@@ -88,22 +96,28 @@ namespace System.Linq.Expressions.Compiler
         {
             Type delegateType = inner._lambda.Type;
             DynamicMethod dynamicMethod = inner._method as DynamicMethod;
+#if FEATURE_COMPILE_TO_METHODBUILDER
             if (dynamicMethod != null)
+#else
+            Debug.Assert(dynamicMethod != null);
+#endif
             {
                 // Emit MethodInfo.CreateDelegate instead because DynamicMethod is not in Windows 8 Profile
                 _boundConstants.EmitConstant(this, dynamicMethod, typeof(MethodInfo));
                 _ilg.EmitType(delegateType);
                 EmitClosureCreation(inner);
-                _ilg.Emit(OpCodes.Callvirt, typeof(MethodInfo).GetMethod("CreateDelegate", new Type[] { typeof(Type), typeof(object) }));
+                _ilg.Emit(OpCodes.Callvirt, MethodInfo_CreateDelegate_Type_Object);
                 _ilg.Emit(OpCodes.Castclass, delegateType);
             }
+#if FEATURE_COMPILE_TO_METHODBUILDER
             else
             {
                 // new DelegateType(closure)
                 EmitClosureCreation(inner);
-                _ilg.Emit(OpCodes.Ldftn, (MethodInfo)inner._method);
+                _ilg.Emit(OpCodes.Ldftn, inner._method);
                 _ilg.Emit(OpCodes.Newobj, (ConstructorInfo)(delegateType.GetMember(".ctor")[0]));
             }
+#endif
         }
 
         /// <summary>
@@ -111,15 +125,20 @@ namespace System.Linq.Expressions.Compiler
         /// May end up creating a wrapper to match the requested delegate type.
         /// </summary>
         /// <param name="lambda">Lambda for which to generate a delegate</param>
-        /// 
+        ///
         private void EmitDelegateConstruction(LambdaExpression lambda)
         {
             // 1. Create the new compiler
             LambdaCompiler impl;
+#if FEATURE_COMPILE_TO_METHODBUILDER
             if (_method is DynamicMethod)
+#else
+            Debug.Assert(_method is DynamicMethod);
+#endif
             {
                 impl = new LambdaCompiler(_tree, lambda);
             }
+#if FEATURE_COMPILE_TO_METHODBUILDER
             else
             {
                 // When the lambda does not have a name or the name is empty, generate a unique name for it.
@@ -127,6 +146,7 @@ namespace System.Linq.Expressions.Compiler
                 MethodBuilder mb = _typeBuilder.DefineMethod(name, MethodAttributes.Private | MethodAttributes.Static);
                 impl = new LambdaCompiler(_tree, lambda, mb);
             }
+#endif
 
             // 2. emit the lambda
             // Since additional ILs are always emitted after the lambda's body, should not emit with tail call optimization.
@@ -136,15 +156,40 @@ namespace System.Linq.Expressions.Compiler
             EmitDelegateConstruction(impl);
         }
 
-        private static Type[] GetParameterTypes(LambdaExpression lambda)
+        private static Type[] GetParameterTypes(LambdaExpression lambda, Type firstType)
         {
-            return lambda.Parameters.Map(p => p.IsByRef ? p.Type.MakeByRefType() : p.Type);
+            int count = lambda.ParameterCount;
+
+            Type[] result;
+            int i;
+
+            if (firstType != null)
+            {
+                result = new Type[count + 1];
+                result[0] = firstType;
+                i = 1;
+            }
+            else
+            {
+                result = new Type[count];
+                i = 0;
+            }
+
+            for (var j = 0; j < count; j++, i++)
+            {
+                ParameterExpression p = lambda.GetParameter(j);
+                result[i] = p.IsByRef ? p.Type.MakeByRefType() : p.Type;
+            }
+
+            return result;
         }
 
+#if FEATURE_COMPILE_TO_METHODBUILDER
         private static string GetUniqueMethodName()
         {
-            return "<ExpressionCompilerImplementationDetails>{" + Interlocked.Increment(ref s_counter) + "}lambda_method";
+            return "<ExpressionCompilerImplementationDetails>{" + System.Threading.Interlocked.Increment(ref s_counter) + "}lambda_method";
         }
+#endif
 
         private void EmitLambdaBody()
         {
@@ -160,7 +205,7 @@ namespace System.Linq.Expressions.Compiler
         /// <param name="parent">The parent scope.</param>
         /// <param name="inlined">true if the lambda is inlined; false otherwise.</param>
         /// <param name="flags">
-        /// The enum to specify if the lambda is compiled with the tail call optimization. 
+        /// The enum to specify if the lambda is compiled with the tail call optimization.
         /// </param>
         private void EmitLambdaBody(CompilerScope parent, bool inlined, CompilationFlags flags)
         {
@@ -173,9 +218,9 @@ namespace System.Linq.Expressions.Compiler
                 //
                 // If any arguments were ByRef, the address is on the stack and
                 // we'll be storing it into the variable, which has a ref type.
-                for (int i = _lambda.Parameters.Count - 1; i >= 0; i--)
+                for (int i = _lambda.ParameterCount - 1; i >= 0; i--)
                 {
-                    _scope.EmitSet(_lambda.Parameters[i]);
+                    _scope.EmitSet(_lambda.GetParameter(i));
                 }
             }
 

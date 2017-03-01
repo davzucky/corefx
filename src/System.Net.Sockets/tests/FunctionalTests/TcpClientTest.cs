@@ -6,9 +6,7 @@ using Xunit;
 using Xunit.Abstractions;
 
 using System.Threading.Tasks;
-using System.Net.Test.Common;
 using System.Text;
-using System.Collections.Generic;
 using System.Diagnostics;
 
 namespace System.Net.Sockets.Tests
@@ -23,28 +21,80 @@ namespace System.Net.Sockets.Tests
         }
 
         [Theory]
+        [InlineData(AddressFamily.Banyan)]
+        [InlineData(AddressFamily.DataLink)]
+        [InlineData(AddressFamily.NetBios)]
+        [InlineData(AddressFamily.Unix)]
+        [InlineData(AddressFamily.Unknown)]
+        public void Ctor_InvalidFamily_Throws(AddressFamily family)
+        {
+            Assert.Throws<ArgumentException>(() => new TcpClient(family));
+        }
+
+        [Fact]
+        public void Ctor_NullAddress_Throws()
+        {
+            Assert.Throws<ArgumentNullException>(() => new TcpClient(null));
+        }
+
+        [OuterLoop] // TODO: Issue #11345
+        [Fact]
+        public void Ctor_StringInt_ConnectsSuccessfully()
+        {
+            string host = System.Net.Test.Common.Configuration.Sockets.SocketServer.IdnHost;
+            int port = System.Net.Test.Common.Configuration.Sockets.SocketServer.Port;
+
+            using (TcpClient client = new TcpClient(host, port))
+            {
+                Assert.True(client.Connected);
+                Assert.NotNull(client.Client);
+                Assert.Same(client.Client, client.Client);
+            }
+        }
+
+        [OuterLoop] // TODO: Issue #11345
+        [Theory]
         [InlineData(0)]
         [InlineData(1)]
         [InlineData(2)]
-        public async Task Connect_DnsEndPoint_Success(int mode)
+        [InlineData(3)]
+        [InlineData(4)]
+        [InlineData(5)]
+        public async Task ConnectAsync_DnsEndPoint_Success(int mode)
         {
             using (TcpClient client = new TcpClient())
             {
                 Assert.False(client.Connected);
 
-                string host = Configuration.Sockets.SocketServer.IdnHost;
-                int port = Configuration.Sockets.SocketServer.Port;
+                string host = System.Net.Test.Common.Configuration.Sockets.SocketServer.IdnHost;
+                int port = System.Net.Test.Common.Configuration.Sockets.SocketServer.Port;
 
-                if (mode == 0)
+                IPAddress[] addresses;
+                switch (mode)
                 {
-                    await client.ConnectAsync(host, port);
-                }
-                else
-                {
-                    IPAddress[] addresses = await Dns.GetHostAddressesAsync(host);
-                    await (mode == 1 ?
-                        client.ConnectAsync(addresses[0], port) :
-                        client.ConnectAsync(addresses, port));
+                    case 0:
+                        await client.ConnectAsync(host, port);
+                        break;
+                    case 1:
+                        addresses = await Dns.GetHostAddressesAsync(host);
+                        await client.ConnectAsync(addresses[0], port);
+                        break;
+                    case 2:
+                        addresses = await Dns.GetHostAddressesAsync(host);
+                        await client.ConnectAsync(addresses, port);
+                        break;
+
+                    case 3:
+                        await Task.Factory.FromAsync(client.BeginConnect, client.EndConnect, host, port, null);
+                        break;
+                    case 4:
+                        addresses = await Dns.GetHostAddressesAsync(host);
+                        await Task.Factory.FromAsync(client.BeginConnect, client.EndConnect, addresses[0], port, null);
+                        break;
+                    case 5:
+                        addresses = await Dns.GetHostAddressesAsync(host);
+                        await Task.Factory.FromAsync(client.BeginConnect, client.EndConnect, addresses, port, null);
+                        break;
                 }
 
                 Assert.True(client.Connected);
@@ -60,6 +110,57 @@ namespace System.Net.Sockets.Tests
             }
         }
 
+        [OuterLoop] // TODO: Issue #11345
+        [Theory]
+        [InlineData(0)]
+        [InlineData(1)]
+        [InlineData(2)]
+        [InlineData(3)]
+        public void Connect_DnsEndPoint_Success(int mode)
+        {
+            using (TcpClient client = new TcpClient())
+            {
+                Assert.False(client.Connected);
+
+                string host = System.Net.Test.Common.Configuration.Sockets.SocketServer.IdnHost;
+                int port = System.Net.Test.Common.Configuration.Sockets.SocketServer.Port;
+
+                if (mode == 0)
+                {
+                    client.Connect(host, port);
+                }
+                else if (mode == 1)
+                {
+                    client.Client = null;
+                    client.Connect(host, port);
+                }
+                else
+                {
+                    IPAddress[] addresses = Dns.GetHostAddresses(host);
+                    if (mode == 2)
+                    {
+                        client.Connect(addresses[0], port);
+                    }
+                    else
+                    {
+                        client.Connect(addresses, port);
+                    }
+                }
+
+                Assert.True(client.Connected);
+                Assert.NotNull(client.Client);
+                Assert.Same(client.Client, client.Client);
+
+                using (NetworkStream s = client.GetStream())
+                {
+                    byte[] getRequest = Encoding.ASCII.GetBytes("GET / HTTP/1.1\r\n\r\n");
+                    s.Write(getRequest, 0, getRequest.Length);
+                    Assert.NotEqual(-1, s.ReadByte()); // just verify we successfully get any data back
+                }
+            }
+        }
+
+        [OuterLoop] // TODO: Issue #11345
         [Fact]
         public void ConnectedAvailable_InitialValues_Default()
         {
@@ -70,6 +171,7 @@ namespace System.Net.Sockets.Tests
             }
         }
 
+        [OuterLoop] // TODO: Issue #11345
         [Fact]
         public void ConnectedAvailable_NullClient()
         {
@@ -82,8 +184,8 @@ namespace System.Net.Sockets.Tests
             }
         }
 
+        [OuterLoop] // TODO: Issue #11345
         [Fact]
-        [PlatformSpecific(PlatformID.Windows)]
         public void ExclusiveAddressUse_NullClient()
         {
             using (TcpClient client = new TcpClient())
@@ -95,32 +197,41 @@ namespace System.Net.Sockets.Tests
         }
 
         [Fact]
-        [PlatformSpecific(PlatformID.Windows)]
-        public void Roundtrip_ExclusiveAddressUse_GetEqualsSet()
+        public void Roundtrip_ExclusiveAddressUse_GetEqualsSet_True()
         {
             using (TcpClient client = new TcpClient())
             {
                 client.ExclusiveAddressUse = true;
                 Assert.True(client.ExclusiveAddressUse);
+            }
+        }
+
+        [Fact]
+        [PlatformSpecific(TestPlatforms.Windows)]  // ExclusiveAddressUse=false only supported on Windows
+        public void Roundtrip_ExclusiveAddressUse_GetEqualsSet_False()
+        {
+            using (TcpClient client = new TcpClient())
+            {
                 client.ExclusiveAddressUse = false;
                 Assert.False(client.ExclusiveAddressUse);
             }
         }
 
+        [OuterLoop] // TODO: Issue #11345
         [Fact]
-        [PlatformSpecific(PlatformID.AnyUnix)]
-        public void ExclusiveAddressUse_NotSupported()
+        [PlatformSpecific(TestPlatforms.AnyUnix)]  // ExclusiveAddressUse=false only supported on Windows
+        public void ExclusiveAddressUse_Set_False_NotSupported()
         {
             using (TcpClient client = new TcpClient())
             {
-                Assert.Throws<SocketException>(() => client.ExclusiveAddressUse);
                 Assert.Throws<SocketException>(() =>
                 {
-                    client.ExclusiveAddressUse = true;
+                    client.ExclusiveAddressUse = false;
                 });
             }
         }
 
+        [OuterLoop] // TODO: Issue #11345
         [Fact]
         public void Roundtrip_LingerOption_GetEqualsSet()
         {
@@ -129,12 +240,18 @@ namespace System.Net.Sockets.Tests
                 client.LingerState = new LingerOption(true, 42);
                 Assert.True(client.LingerState.Enabled);
                 Assert.Equal(42, client.LingerState.LingerTime);
+
+                client.LingerState = new LingerOption(true, 0);
+                Assert.True(client.LingerState.Enabled);
+                Assert.Equal(0, client.LingerState.LingerTime);
+
                 client.LingerState = new LingerOption(false, 0);
                 Assert.False(client.LingerState.Enabled);
                 Assert.Equal(0, client.LingerState.LingerTime);
             }
         }
 
+        [OuterLoop] // TODO: Issue #11345
         [Fact]
         public void Roundtrip_NoDelay_GetEqualsSet()
         {
@@ -147,30 +264,33 @@ namespace System.Net.Sockets.Tests
             }
         }
 
+        [OuterLoop] // TODO: Issue #11345
         [Fact]
         public void Roundtrip_ReceiveBufferSize_GetEqualsSet()
         {
             using (TcpClient client = new TcpClient())
             {
                 client.ReceiveBufferSize = 4096;
-                Assert.Equal(4096, client.ReceiveBufferSize);
+                Assert.InRange(client.ReceiveBufferSize, 4096, int.MaxValue);
                 client.ReceiveBufferSize = 8192;
-                Assert.Equal(8192, client.ReceiveBufferSize);
+                Assert.InRange(client.ReceiveBufferSize, 8192, int.MaxValue);
             }
         }
 
+        [OuterLoop] // TODO: Issue #11345
         [Fact]
         public void Roundtrip_SendBufferSize_GetEqualsSet()
         {
             using (TcpClient client = new TcpClient())
             {
                 client.SendBufferSize = 4096;
-                Assert.Equal(4096, client.SendBufferSize);
+                Assert.InRange(client.SendBufferSize, 4096, int.MaxValue);
                 client.SendBufferSize = 8192;
-                Assert.Equal(8192, client.SendBufferSize);
+                Assert.InRange(client.SendBufferSize, 8192, int.MaxValue);
             }
         }
 
+        [OuterLoop] // TODO: Issue #11345
         [Fact]
         public void Roundtrip_ReceiveTimeout_GetEqualsSet()
         {
@@ -183,6 +303,7 @@ namespace System.Net.Sockets.Tests
             }
         }
 
+        [OuterLoop] // TODO: Issue #11345
         [Fact]
         public void Roundtrip_SendTimeout_GetEqualsSet()
         {
@@ -195,6 +316,7 @@ namespace System.Net.Sockets.Tests
             }
         }
 
+        [OuterLoop] // TODO: Issue #11345
         [Fact]
         public async Task Properties_PersistAfterConnect()
         {
@@ -205,7 +327,7 @@ namespace System.Net.Sockets.Tests
                 client.ReceiveTimeout = 42;
                 client.SendTimeout = 84;
 
-                await client.ConnectAsync(Configuration.Sockets.SocketServer.IdnHost, Configuration.Sockets.SocketServer.Port);
+                await client.ConnectAsync(System.Net.Test.Common.Configuration.Sockets.SocketServer.IdnHost, System.Net.Test.Common.Configuration.Sockets.SocketServer.Port);
 
                 // Verify their values remain as were set before connecting
                 Assert.True(client.LingerState.Enabled);
@@ -220,6 +342,7 @@ namespace System.Net.Sockets.Tests
             }
         }
 
+        [OuterLoop] // TODO: Issue #11345
         [Theory]
         [InlineData(false)]
         [InlineData(true)]

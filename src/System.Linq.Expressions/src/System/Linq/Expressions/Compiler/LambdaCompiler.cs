@@ -3,33 +3,39 @@
 // See the LICENSE file in the project root for more information.
 
 using System.Collections.Generic;
-using System.Collections.ObjectModel;
 using System.Diagnostics;
-using System.Dynamic.Utils;
 using System.Reflection;
 using System.Reflection.Emit;
 using System.Runtime.CompilerServices;
-using System.Threading;
 
 namespace System.Linq.Expressions.Compiler
 {
+    internal interface ILocalCache
+    {
+        LocalBuilder GetLocal(Type type);
+
+        void FreeLocal(LocalBuilder local);
+    }
+
     /// <summary>
     /// LambdaCompiler is responsible for compiling individual lambda (LambdaExpression). The complete tree may
     /// contain multiple lambdas, the Compiler class is responsible for compiling the whole tree, individual
     /// lambdas are then compiled by the LambdaCompiler.
     /// </summary>
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Microsoft.Maintainability", "CA1506:AvoidExcessiveClassCoupling")]
-    internal sealed partial class LambdaCompiler
+    internal sealed partial class LambdaCompiler : ILocalCache
     {
-        private delegate void WriteBack();
+        private delegate void WriteBack(LambdaCompiler compiler);
 
         // Information on the entire lambda tree currently being compiled
         private readonly AnalyzedTree _tree;
 
         private readonly ILGenerator _ilg;
 
+#if FEATURE_COMPILE_TO_METHODBUILDER
         // The TypeBuilder backing this method, if any
         private readonly TypeBuilder _typeBuilder;
+#endif
 
         private readonly MethodInfo _method;
 
@@ -51,14 +57,14 @@ namespace System.Linq.Expressions.Compiler
         private readonly BoundConstants _boundConstants;
 
         // Free list of locals, so we reuse them rather than creating new ones
-        private readonly KeyedQueue<Type, LocalBuilder> _freeLocals = new KeyedQueue<Type, LocalBuilder>();
+        private readonly KeyedStack<Type, LocalBuilder> _freeLocals = new KeyedStack<Type, LocalBuilder>();
 
         /// <summary>
         /// Creates a lambda compiler that will compile to a dynamic method
         /// </summary>
         private LambdaCompiler(AnalyzedTree tree, LambdaExpression lambda)
         {
-            Type[] parameterTypes = GetParameterTypes(lambda).AddFirst(typeof(Closure));
+            Type[] parameterTypes = GetParameterTypes(lambda, typeof(Closure));
 
             var method = new DynamicMethod(lambda.Name ?? "lambda_method", lambda.ReturnType, parameterTypes, true);
 
@@ -66,12 +72,12 @@ namespace System.Linq.Expressions.Compiler
             _lambda = lambda;
             _method = method;
 
-            // In a Win8 immersive process user code is not allowed to access non-W8P framework APIs through 
+            // In a Win8 immersive process user code is not allowed to access non-W8P framework APIs through
             // reflection or RefEmit. Framework code, however, is given an exemption.
             // This is to make sure that user code cannot access non-W8P framework APIs via ExpressionTree.
 
             // TODO: This API is not available, is there an alternative way to achieve the same.
-            // method.ProfileAPICheck = true; 
+            // method.ProfileAPICheck = true;
 
             _ilg = method.GetILGenerator();
 
@@ -84,6 +90,7 @@ namespace System.Linq.Expressions.Compiler
             InitializeMethod();
         }
 
+#if FEATURE_COMPILE_TO_METHODBUILDER
         /// <summary>
         /// Creates a lambda compiler that will compile into the provided MethodBuilder
         /// </summary>
@@ -92,25 +99,21 @@ namespace System.Linq.Expressions.Compiler
             var scope = tree.Scopes[lambda];
             var hasClosureArgument = scope.NeedsClosure;
 
-            Type[] paramTypes = GetParameterTypes(lambda);
-            if (hasClosureArgument)
-            {
-                paramTypes = paramTypes.AddFirst(typeof(Closure));
-            }
+            Type[] paramTypes = GetParameterTypes(lambda, hasClosureArgument ? typeof(Closure) : null);
 
             method.SetReturnType(lambda.ReturnType);
             method.SetParameters(paramTypes);
-            var paramNames = lambda.Parameters.Map(p => p.Name);
+            var parameters = lambda.Parameters;
             // parameters are index from 1, with closure argument we need to skip the first arg
             int startIndex = hasClosureArgument ? 2 : 1;
-            for (int i = 0; i < paramNames.Length; i++)
+            for (int i = 0, n = parameters.Count; i < n; i++)
             {
-                method.DefineParameter(i + startIndex, ParameterAttributes.None, paramNames[i]);
+                method.DefineParameter(i + startIndex, ParameterAttributes.None, parameters[i].Name);
             }
 
             _tree = tree;
             _lambda = lambda;
-            _typeBuilder = (TypeBuilder)method.DeclaringType.GetTypeInfo();
+            _typeBuilder = (TypeBuilder)method.DeclaringType;
             _method = method;
             _hasClosureArgument = hasClosureArgument;
 
@@ -122,6 +125,7 @@ namespace System.Linq.Expressions.Compiler
 
             InitializeMethod();
         }
+#endif
 
         /// <summary>
         /// Creates a lambda compiler for an inlined lambda
@@ -136,7 +140,9 @@ namespace System.Linq.Expressions.Compiler
             _method = parent._method;
             _ilg = parent._ilg;
             _hasClosureArgument = parent._hasClosureArgument;
+#if FEATURE_COMPILE_TO_METHODBUILDER
             _typeBuilder = parent._typeBuilder;
+#endif
             // inlined scopes are associated with invocation, not with the lambda
             _scope = _tree.Scopes[invocation];
             _boundConstants = parent._boundConstants;
@@ -154,20 +160,13 @@ namespace System.Linq.Expressions.Compiler
             return _method.ToString();
         }
 
-        internal ILGenerator IL
-        {
-            get { return _ilg; }
-        }
+        internal ILGenerator IL => _ilg;
 
-        internal ReadOnlyCollection<ParameterExpression> Parameters
-        {
-            get { return _lambda.Parameters; }
-        }
+        internal IParameterProvider Parameters => _lambda;
 
-        internal bool CanEmitBoundConstants
-        {
-            get { return _method is DynamicMethod; }
-        }
+#if FEATURE_COMPILE_TO_METHODBUILDER
+        internal bool CanEmitBoundConstants => _method is DynamicMethod;
+#endif
 
         #region Compiler entry points
 
@@ -191,6 +190,26 @@ namespace System.Linq.Expressions.Compiler
             return c.CreateDelegate();
         }
 
+#if FEATURE_COMPILE_TO_METHODBUILDER
+        /// <summary>
+        /// Mutates the MethodBuilder parameter, filling in IL, parameters,
+        /// and return type.
+        ///
+        /// (probably shouldn't be modifying parameters/return type...)
+        /// </summary>
+        internal static void Compile(LambdaExpression lambda, MethodBuilder method)
+        {
+            // 1. Bind lambda
+            AnalyzedTree tree = AnalyzeLambda(ref lambda);
+
+            // 2. Create lambda compiler
+            LambdaCompiler c = new LambdaCompiler(tree, lambda, method);
+
+            // 3. Emit
+            c.EmitLambdaBody();
+        }
+#endif
+
         #endregion
 
         private static AnalyzedTree AnalyzeLambda(ref LambdaExpression lambda)
@@ -203,26 +222,12 @@ namespace System.Linq.Expressions.Compiler
             return VariableBinder.Bind(lambda);
         }
 
-        internal LocalBuilder GetLocal(Type type)
+        public LocalBuilder GetLocal(Type type) => _freeLocals.TryPop(type) ?? _ilg.DeclareLocal(type);
+
+        public void FreeLocal(LocalBuilder local)
         {
-            Debug.Assert(type != null);
-
-            LocalBuilder local;
-            if (_freeLocals.TryDequeue(type, out local))
-            {
-                Debug.Assert(type == local.LocalType);
-                return local;
-            }
-
-            return _ilg.DeclareLocal(type);
-        }
-
-        internal void FreeLocal(LocalBuilder local)
-        {
-            if (local != null)
-            {
-                _freeLocals.Enqueue(local.LocalType, local);
-            }
+            Debug.Assert(local != null);
+            _freeLocals.Push(local.LocalType, local);
         }
 
         internal LocalBuilder GetNamedLocal(Type type, ParameterExpression variable)
@@ -266,14 +271,16 @@ namespace System.Linq.Expressions.Compiler
             return _method.CreateDelegate(_lambda.Type, new Closure(_boundConstants.ToArray(), null));
         }
 
+#if FEATURE_COMPILE_TO_METHODBUILDER
         private FieldBuilder CreateStaticField(string name, Type type)
         {
             // We are emitting into someone else's type. We don't want name
             // conflicts, so choose a long name that is unlikely to conflict.
             // Naming scheme chosen here is similar to what the C# compiler
             // uses.
-            return _typeBuilder.DefineField("<ExpressionCompilerImplementationDetails>{" + Interlocked.Increment(ref s_counter) + "}" + name, type, FieldAttributes.Static | FieldAttributes.Private);
+            return _typeBuilder.DefineField("<ExpressionCompilerImplementationDetails>{" + System.Threading.Interlocked.Increment(ref s_counter) + "}" + name, type, FieldAttributes.Static | FieldAttributes.Private);
         }
+#endif
 
         /// <summary>
         /// Creates an uninitialized field suitable for private implementation details
@@ -281,14 +288,20 @@ namespace System.Linq.Expressions.Compiler
         /// </summary>
         private MemberExpression CreateLazyInitializedField<T>(string name)
         {
+#if FEATURE_COMPILE_TO_METHODBUILDER
             if (_method is DynamicMethod)
+#else
+            Debug.Assert(_method is DynamicMethod);
+#endif
             {
                 return Expression.Field(Expression.Constant(new StrongBox<T>(default(T))), "Value");
             }
+#if FEATURE_COMPILE_TO_METHODBUILDER
             else
             {
                 return Expression.Field(null, CreateStaticField(name, typeof(T)));
             }
+#endif
         }
     }
 }

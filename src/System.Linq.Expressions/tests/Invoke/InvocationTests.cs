@@ -2,9 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for more information.
 
-using System;
-using System.Collections.Generic;
-using System.Reflection;
 using Xunit;
 
 namespace System.Linq.Expressions.Tests
@@ -13,41 +10,18 @@ namespace System.Linq.Expressions.Tests
     {
         public delegate void X(X a);
 
-        private struct Mutable
-        {
-            private int x;
-            public int Foo()
-            {
-                return x++;
-            }
-        }
-
-        private class Wrapper<T>
-        {
-            public const int Zero = 0;
-            public T Field;
-#pragma warning disable 649 // For testing purposes
-            public readonly T ReadOnlyField;
-#pragma warning restore
-            public T Property
-            {
-                get { return Field; }
-                set { Field = value; }
-            }
-        }
-
         [Theory]
         [ClassData(typeof(CompilationTypes))]
         public static void SelfApplication(bool useInterpreter)
         {
             // Expression<X> f = x => {};
             Expression<X> f = Expression.Lambda<X>(Expression.Empty(), Expression.Parameter(typeof(X)));
-            var a = Expression.Lambda(Expression.Invoke(f, f));
+            LambdaExpression a = Expression.Lambda(Expression.Invoke(f, f));
 
             a.Compile(useInterpreter).DynamicInvoke();
 
-            var it = Expression.Parameter(f.Type);
-            var b = Expression.Lambda(Expression.Invoke(Expression.Lambda(Expression.Invoke(it, it), it), f));
+            ParameterExpression it = Expression.Parameter(f.Type);
+            LambdaExpression b = Expression.Lambda(Expression.Invoke(Expression.Lambda(Expression.Invoke(it, it), it), f));
 
             b.Compile(useInterpreter).DynamicInvoke();
         }
@@ -76,15 +50,15 @@ namespace System.Linq.Expressions.Tests
 
             public Action Compile()
             {
-                var ind0 = Expression.Constant(this);
-                var fld = Expression.PropertyOrField(ind0, "DoItA");
-                var block = Expression.Block(typeof(void), Expression.Invoke(fld, ind0));
+                ConstantExpression ind0 = Expression.Constant(this);
+                MemberExpression fld = Expression.PropertyOrField(ind0, "DoItA");
+                BlockExpression block = Expression.Block(typeof(void), Expression.Invoke(fld, ind0));
                 return Expression.Lambda<Action>(block).Compile(_preferInterpretation);
             }
 
             public void DoTest()
             {
-                var act = Compile();
+                Action act = Compile();
                 act();
                 Assert.Equal(1, DoItA(this));
             }
@@ -109,157 +83,65 @@ namespace System.Linq.Expressions.Tests
         public static void InvocationDoesNotChangeFunctionInvoked(bool useInterpreter)
         {
             FuncHolder holder = new FuncHolder();
-            var fld = Expression.Field(Expression.Constant(holder), "Function");
-            var inv = Expression.Invoke(fld);
+            MemberExpression fld = Expression.Field(Expression.Constant(holder), "Function");
+            InvocationExpression inv = Expression.Invoke(fld);
             Func<int> act = (Func<int>)Expression.Lambda(inv).Compile(useInterpreter);
             act();
             Assert.Equal(1, holder.Function());
         }
 
-        [Theory]
-        [ClassData(typeof(CompilationTypes))]
-        public static void UnboxReturnsReference(bool useInterpreter)
+        [Fact]
+        public static void ToStringTest()
         {
-            var p = Expression.Parameter(typeof(object));
-            var unbox = Expression.Unbox(p, typeof(Mutable));
-            var call = Expression.Call(unbox, typeof(Mutable).GetMethod("Foo"));
-            var lambda = Expression.Lambda<Func<object, int>>(call, p).Compile(useInterpreter);
+            InvocationExpression e1 = Expression.Invoke(Expression.Parameter(typeof(Action), "f"));
+            Assert.Equal("Invoke(f)", e1.ToString());
 
-            object boxed = new Mutable();
-            Assert.Equal(0, lambda(boxed));
-            Assert.Equal(1, lambda(boxed));
-            Assert.Equal(2, lambda(boxed));
-            Assert.Equal(3, lambda(boxed));
+            InvocationExpression e2 = Expression.Invoke(Expression.Parameter(typeof(Action<int>), "f"), Expression.Parameter(typeof(int), "x"));
+            Assert.Equal("Invoke(f, x)", e2.ToString());
         }
 
-        [Theory]
-        [ClassData(typeof(CompilationTypes))]
-        public static void ArrayWriteBack(bool useInterpreter)
+        [Fact]
+        public static void GetArguments()
         {
-            var p = Expression.Parameter(typeof(Mutable[]));
-            var indexed = Expression.ArrayIndex(p, Expression.Constant(0));
-            var call = Expression.Call(indexed, typeof(Mutable).GetMethod("Foo"));
-            var lambda = Expression.Lambda<Func<Mutable[], int>>(call, p).Compile(useInterpreter);
-
-            var array = new Mutable[1];
-            Assert.Equal(0, lambda(array));
-            Assert.Equal(1, lambda(array));
-            Assert.Equal(2, lambda(array));
+            VerifyGetArguments(Expression.Invoke(Expression.Default(typeof(Action))));
+            VerifyGetArguments(Expression.Invoke(Expression.Default(typeof(Action<int>)), Expression.Constant(0)));
+            VerifyGetArguments(
+                Expression.Invoke(
+                    Expression.Default(typeof(Action<int, int>)),
+                    Enumerable.Range(0, 2).Select(i => Expression.Constant(i))));
+            VerifyGetArguments(
+                Expression.Invoke(
+                    Expression.Default(typeof(Action<int, int, int>)),
+                    Enumerable.Range(0, 3).Select(i => Expression.Constant(i))));
+            VerifyGetArguments(
+                Expression.Invoke(
+                    Expression.Default(typeof(Action<int, int, int, int>)),
+                    Enumerable.Range(0, 4).Select(i => Expression.Constant(i))));
+            VerifyGetArguments(
+                Expression.Invoke(
+                    Expression.Default(typeof(Action<int, int, int, int, int>)),
+                    Enumerable.Range(0, 5).Select(i => Expression.Constant(i))));
+            VerifyGetArguments(
+                Expression.Invoke(
+                    Expression.Default(typeof(Action<int, int, int, int, int, int>)),
+                    Enumerable.Range(0, 6).Select(i => Expression.Constant(i))));
+            VerifyGetArguments(
+                Expression.Invoke(
+                    Expression.Default(typeof(Action<int, int, int, int, int, int, int>)),
+                    Enumerable.Range(0, 7).Select(i => Expression.Constant(i))));
         }
 
-        [Theory]
-        [ClassData(typeof(CompilationTypes))]
-        public static void MultiRankArrayWriteBack(bool useInterpreter)
+        private static void VerifyGetArguments(InvocationExpression invoke)
         {
-            var p = Expression.Parameter(typeof(Mutable[,]));
-            var indexed = Expression.ArrayIndex(p, Expression.Constant(0), Expression.Constant(0));
-            var call = Expression.Call(indexed, typeof(Mutable).GetMethod("Foo"));
-            var lambda = Expression.Lambda<Func<Mutable[,], int>>(call, p).Compile(useInterpreter);
-
-            var array = new Mutable[1, 1];
-            Assert.Equal(0, lambda(array));
-            Assert.Equal(1, lambda(array));
-            Assert.Equal(2, lambda(array));
-        }
-
-        [Theory]
-        [ClassData(typeof(CompilationTypes))]
-        public static void ArrayAccessWriteBack(bool useInterpreter)
-        {
-            var p = Expression.Parameter(typeof(Mutable[]));
-            var indexed = Expression.ArrayAccess(p, Expression.Constant(0));
-            var call = Expression.Call(indexed, typeof(Mutable).GetMethod("Foo"));
-            var lambda = Expression.Lambda<Func<Mutable[], int>>(call, p).Compile(useInterpreter);
-
-            var array = new Mutable[1];
-            Assert.Equal(0, lambda(array));
-            Assert.Equal(1, lambda(array));
-            Assert.Equal(2, lambda(array));
-        }
-
-        [Theory]
-        [ClassData(typeof(CompilationTypes))]
-        public static void MultiRankArrayAccessWriteBack(bool useInterpreter)
-        {
-            var p = Expression.Parameter(typeof(Mutable[,]));
-            var indexed = Expression.ArrayAccess(p, Expression.Constant(0), Expression.Constant(0));
-            var call = Expression.Call(indexed, typeof(Mutable).GetMethod("Foo"));
-            var lambda = Expression.Lambda<Func<Mutable[,], int>>(call, p).Compile(useInterpreter);
-
-            var array = new Mutable[1, 1];
-            Assert.Equal(0, lambda(array));
-            Assert.Equal(1, lambda(array));
-            Assert.Equal(2, lambda(array));
-        }
-
-        [Theory]
-        [ClassData(typeof(CompilationTypes))]
-        public static void IndexedPropertyAccessNoWriteBack(bool useInterpreter)
-        {
-            var p = Expression.Parameter(typeof(List<Mutable>));
-            var indexed = Expression.Property(p, typeof(List<Mutable>).GetProperty("Item"), Expression.Constant(0));
-            var call = Expression.Call(indexed, typeof(Mutable).GetMethod("Foo"));
-            var lambda = Expression.Lambda<Func<List<Mutable>, int>>(call, p).Compile(useInterpreter);
-
-            var list = new List<Mutable> { new Mutable() };
-            Assert.Equal(0, lambda(list));
-            Assert.Equal(0, lambda(list));
-        }
-
-        [Theory]
-        [ClassData(typeof(CompilationTypes))]
-        public static void FieldAccessWriteBack(bool useInterpreter)
-        {
-            var p = Expression.Parameter(typeof(Wrapper<Mutable>));
-            var member = Expression.Field(p, typeof(Wrapper<Mutable>).GetField("Field"));
-            var call = Expression.Call(member, typeof(Mutable).GetMethod("Foo"));
-            var lambda = Expression.Lambda<Func<Wrapper<Mutable>, int>>(call, p).Compile(useInterpreter);
-
-            var wrapper = new Wrapper<Mutable>();
-            Assert.Equal(0, lambda(wrapper));
-            Assert.Equal(1, lambda(wrapper));
-            Assert.Equal(2, lambda(wrapper));
-        }
-
-        [Theory]
-        [ClassData(typeof(CompilationTypes))]
-        public static void PropertyAccessNoWriteBack(bool useInterpreter)
-        {
-            var p = Expression.Parameter(typeof(Wrapper<Mutable>));
-            var member = Expression.Property(p, typeof(Wrapper<Mutable>).GetProperty("Property"));
-            var call = Expression.Call(member, typeof(Mutable).GetMethod("Foo"));
-            var lambda = Expression.Lambda<Func<Wrapper<Mutable>, int>>(call, p).Compile(useInterpreter);
-
-            var wrapper = new Wrapper<Mutable>();
-            Assert.Equal(0, lambda(wrapper));
-            Assert.Equal(0, lambda(wrapper));
-        }
-
-        [Theory]
-        [ClassData(typeof(CompilationTypes))]
-        public static void ReadonlyFieldAccessWriteBack(bool useInterpreter)
-        {
-            var p = Expression.Parameter(typeof(Wrapper<Mutable>));
-            var member = Expression.Field(p, typeof(Wrapper<Mutable>).GetField("ReadOnlyField"));
-            var call = Expression.Call(member, typeof(Mutable).GetMethod("Foo"));
-            var lambda = Expression.Lambda<Func<Wrapper<Mutable>, int>>(call, p).Compile(useInterpreter);
-
-            var wrapper = new Wrapper<Mutable>();
-            Assert.Equal(0, lambda(wrapper));
-            Assert.Equal(0, lambda(wrapper));
-            Assert.Equal(0, lambda(wrapper));
-        }
-
-        [Theory]
-        [ClassData(typeof(CompilationTypes))]
-        public static void ConstFieldAccessWriteBack(bool useInterpreter)
-        {
-            var member = Expression.Field(null, typeof(Wrapper<Mutable>).GetField("Zero"));
-            var call = Expression.Call(member, typeof(int).GetMethod("GetType"));
-            var lambda = Expression.Lambda<Func<Type>>(call).Compile(useInterpreter);
-
-            var wrapper = new Wrapper<Mutable>();
-            Assert.Equal(typeof(int), lambda());
+            var args = invoke.Arguments;
+            Assert.Equal(args.Count, invoke.ArgumentCount);
+            Assert.Throws<ArgumentOutOfRangeException>("index", () => invoke.GetArgument(-1));
+            Assert.Throws<ArgumentOutOfRangeException>("index", () => invoke.GetArgument(args.Count));
+            for (int i = 0; i != args.Count; ++i)
+            {
+                Assert.Same(args[i], invoke.GetArgument(i));
+                Assert.Equal(i, ((ConstantExpression)invoke.GetArgument(i)).Value);
+            }
         }
     }
 }

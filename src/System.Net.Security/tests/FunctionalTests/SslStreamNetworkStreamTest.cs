@@ -12,8 +12,11 @@ using Xunit;
 
 namespace System.Net.Security.Tests
 {
+    using Configuration = System.Net.Test.Common.Configuration;
+
     public class SslStreamNetworkStreamTest
     {
+
         [Fact]
         public async void SslStream_SendReceiveOverNetworkStream_Ok()
         {

@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for more information.
 
-using System;
 using System.Reflection;
 using Xunit;
 
@@ -179,7 +178,7 @@ namespace System.Linq.Expressions.Tests
         {
             Expression variable = Expression.Variable(typeof(string));
             MethodInfo method = typeof(object).GetTypeInfo().GetDeclaredMethod("ReferenceEquals");
-            Assert.Throws<ArgumentException>(null, () => Expression.PostIncrementAssign(variable, method));
+            Assert.Throws<ArgumentException>("method", () => Expression.PostIncrementAssign(variable, method));
         }
 
         [Fact]
@@ -285,6 +284,13 @@ namespace System.Linq.Expressions.Tests
         {
             UnaryExpression op = Expression.PostIncrementAssign(Expression.Variable(typeof(int)));
             Assert.NotSame(op, op.Update(Expression.Variable(typeof(int))));
+        }
+
+        [Fact]
+        public void ToStringTest()
+        {
+            UnaryExpression e = Expression.PostIncrementAssign(Expression.Parameter(typeof(int), "x"));
+            Assert.Equal("x++", e.ToString());
         }
     }
 }

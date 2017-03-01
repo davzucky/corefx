@@ -3,6 +3,7 @@
 // See the LICENSE file in the project root for more information.
 
 using System.Diagnostics;
+using System.Runtime.CompilerServices;
 
 namespace System.Collections.Generic
 {
@@ -48,6 +49,7 @@ namespace System.Collections.Generic
     // 
     [DebuggerTypeProxy(typeof(IDictionaryDebugView<,>))]
     [DebuggerDisplay("Count = {Count}")]
+    [Serializable]
     public class SortedList<TKey, TValue> :
         IDictionary<TKey, TValue>, IDictionary, IReadOnlyDictionary<TKey, TValue>
     {
@@ -58,6 +60,7 @@ namespace System.Collections.Generic
         private IComparer<TKey> _comparer;
         private KeyList _keyList;
         private ValueList _valueList;
+        [NonSerialized]
         private object _syncRoot;
 
         private const int DefaultCapacity = 4;
@@ -413,8 +416,14 @@ namespace System.Collections.Generic
             // clear does not change the capacity
             _version++;
             // Don't need to doc this but we clear the elements so that the gc can reclaim the references.
-            Array.Clear(_keys, 0, _size);
-            Array.Clear(_values, 0, _size);
+            if (RuntimeHelpers.IsReferenceOrContainsReferences<TKey>())
+            {
+                Array.Clear(_keys, 0, _size);
+            }
+            if (RuntimeHelpers.IsReferenceOrContainsReferences<TValue>())
+            {
+                Array.Clear(_values, 0, _size);
+            }
             _size = 0;
         }
 
@@ -588,7 +597,6 @@ namespace System.Collections.Generic
                     return _values[i];
 
                 throw new KeyNotFoundException();
-                // return default(TValue);
             }
             set
             {
@@ -623,7 +631,7 @@ namespace System.Collections.Generic
             {
                 if (!IsCompatibleKey(key))
                 {
-                    throw new ArgumentException(SR.Argument_InvalidArgumentForComparison, nameof(key));
+                    throw new ArgumentNullException(nameof(key));
                 }
 
                 if (value == null && !(default(TValue) == null))
@@ -705,8 +713,14 @@ namespace System.Collections.Generic
                 Array.Copy(_keys, index + 1, _keys, index, _size - index);
                 Array.Copy(_values, index + 1, _values, index, _size - index);
             }
-            _keys[_size] = default(TKey);
-            _values[_size] = default(TValue);
+            if (RuntimeHelpers.IsReferenceOrContainsReferences<TKey>())
+            {
+                _keys[_size] = default(TKey);
+            }
+            if (RuntimeHelpers.IsReferenceOrContainsReferences<TValue>())
+            {
+                _values[_size] = default(TValue);
+            }
             _version++;
         }
 
@@ -755,8 +769,8 @@ namespace System.Collections.Generic
 
             return (key is TKey);
         }
-
-        /// <include file='doc\SortedList.uex' path='docs/doc[@for="SortedListEnumerator"]/*' />
+        
+        [Serializable]
         private struct Enumerator : IEnumerator<KeyValuePair<TKey, TValue>>, IDictionaryEnumerator
         {
             private SortedList<TKey, TValue> _sortedList;
@@ -884,6 +898,7 @@ namespace System.Collections.Generic
             }
         }
 
+        [Serializable]
         private sealed class SortedListKeyEnumerator : IEnumerator<TKey>, IEnumerator
         {
             private SortedList<TKey, TValue> _sortedList;
@@ -954,6 +969,7 @@ namespace System.Collections.Generic
             }
         }
 
+        [Serializable]
         private sealed class SortedListValueEnumerator : IEnumerator<TValue>, IEnumerator
         {
             private SortedList<TKey, TValue> _sortedList;
@@ -1026,6 +1042,7 @@ namespace System.Collections.Generic
 
         [DebuggerTypeProxy(typeof(DictionaryKeyCollectionDebugView<,>))]
         [DebuggerDisplay("Count = {Count}")]
+        [Serializable]
         private sealed class KeyList : IList<TKey>, ICollection
         {
             private SortedList<TKey, TValue> _dict;
@@ -1144,6 +1161,7 @@ namespace System.Collections.Generic
 
         [DebuggerTypeProxy(typeof(DictionaryValueCollectionDebugView<,>))]
         [DebuggerDisplay("Count = {Count}")]
+        [Serializable]
         private sealed class ValueList : IList<TValue>, ICollection
         {
             private SortedList<TKey, TValue> _dict;

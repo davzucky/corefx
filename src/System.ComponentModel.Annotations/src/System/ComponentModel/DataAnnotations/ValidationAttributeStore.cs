@@ -3,6 +3,7 @@
 // See the LICENSE file in the project root for more information.
 
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Globalization;
 using System.Linq;
 using System.Reflection;
@@ -115,10 +116,7 @@ namespace System.ComponentModel.DataAnnotations
         /// <returns>The type store item.  It will not be null.</returns>
         private TypeStoreItem GetTypeStoreItem(Type type)
         {
-            if (type == null)
-            {
-                throw new ArgumentNullException(nameof(type));
-            }
+            Debug.Assert(type != null);
 
             lock (_typeStoreItems)
             {
@@ -126,7 +124,7 @@ namespace System.ComponentModel.DataAnnotations
                 if (!_typeStoreItems.TryGetValue(type, out item))
                 {
                     // use CustomAttributeExtensions.GetCustomAttributes() to get inherited attributes as well as direct ones
-                    var attributes = CustomAttributeExtensions.GetCustomAttributes(type.GetTypeInfo(), true);
+                    var attributes = CustomAttributeExtensions.GetCustomAttributes(type, true);
                     item = new TypeStoreItem(type, attributes);
                     _typeStoreItems[type] = item;
                 }

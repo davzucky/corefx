@@ -15,14 +15,13 @@ using System.Linq.Parallel;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using System.Diagnostics.Contracts;
+using System.Diagnostics;
 
 namespace System.Linq.Parallel
 {
     class OrderPreservingPipeliningSpoolingTask<TOutput, TKey> : SpoolingTaskBase
     {
         private readonly QueryTaskGroupState _taskGroupState; // State shared among tasks.
-        private readonly TaskScheduler _taskScheduler; // The task manager to execute the query.
         private readonly QueryOperatorEnumerator<TOutput, TKey> _partition; // The source partition.
         private readonly bool[] _consumerWaiting; // Whether a consumer is waiting on a particular producer
         private readonly bool[] _producerWaiting; // Whether a particular producer is waiting on the consumer
@@ -60,17 +59,16 @@ namespace System.Linq.Parallel
             int partitionIndex,
             Queue<Pair<TKey, TOutput>>[] buffers,
             object bufferLock,
-            TaskScheduler taskScheduler,
             bool autoBuffered)
             : base(partitionIndex, taskGroupState)
         {
-            Contract.Requires(partition != null);
-            Contract.Requires(taskGroupState != null);
-            Contract.Requires(consumerWaiting != null);
-            Contract.Requires(producerWaiting != null && producerWaiting.Length == consumerWaiting.Length);
-            Contract.Requires(producerDone != null && producerDone.Length == consumerWaiting.Length);
-            Contract.Requires(buffers != null && buffers.Length == consumerWaiting.Length);
-            Contract.Requires(partitionIndex >= 0 && partitionIndex < consumerWaiting.Length);
+            Debug.Assert(partition != null);
+            Debug.Assert(taskGroupState != null);
+            Debug.Assert(consumerWaiting != null);
+            Debug.Assert(producerWaiting != null && producerWaiting.Length == consumerWaiting.Length);
+            Debug.Assert(producerDone != null && producerDone.Length == consumerWaiting.Length);
+            Debug.Assert(buffers != null && buffers.Length == consumerWaiting.Length);
+            Debug.Assert(partitionIndex >= 0 && partitionIndex < consumerWaiting.Length);
 
             _partition = partition;
             _taskGroupState = taskGroupState;
@@ -80,7 +78,6 @@ namespace System.Linq.Parallel
             _partitionIndex = partitionIndex;
             _buffers = buffers;
             _bufferLock = bufferLock;
-            _taskScheduler = taskScheduler;
             _autoBuffered = autoBuffered;
         }
 
@@ -151,11 +148,11 @@ namespace System.Linq.Parallel
             Queue<Pair<TKey, TOutput>>[] buffers, object[] bufferLocks,
             TaskScheduler taskScheduler, bool autoBuffered)
         {
-            Contract.Requires(groupState != null);
-            Contract.Requires(partitions != null);
-            Contract.Requires(producerDone != null && producerDone.Length == partitions.PartitionCount);
-            Contract.Requires(buffers != null && buffers.Length == partitions.PartitionCount);
-            Contract.Requires(bufferLocks != null);
+            Debug.Assert(groupState != null);
+            Debug.Assert(partitions != null);
+            Debug.Assert(producerDone != null && producerDone.Length == partitions.PartitionCount);
+            Debug.Assert(buffers != null && buffers.Length == partitions.PartitionCount);
+            Debug.Assert(bufferLocks != null);
 
             int degreeOfParallelism = partitions.PartitionCount;
 
@@ -176,7 +173,7 @@ namespace System.Linq.Parallel
                     {
                         QueryTask asyncTask = new OrderPreservingPipeliningSpoolingTask<TOutput, TKey>(
                             partitions[i], groupState, consumerWaiting, producerWaiting,
-                            producerDone, i, buffers, bufferLocks[i], taskScheduler, autoBuffered);
+                            producerDone, i, buffers, bufferLocks[i], autoBuffered);
                         asyncTask.RunAsynchronously(taskScheduler);
                     }
                 });

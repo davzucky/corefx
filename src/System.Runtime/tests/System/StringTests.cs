@@ -49,7 +49,7 @@ namespace System.Tests
             fixed (byte* pBytes = bytes)
             {
                 // The address of a fixed byte[] should always be even
-                Debug.Assert((int)pBytes % 2 == 0);
+                Debug.Assert(unchecked((int)pBytes) % 2 == 0);
                 char* pCh = (char*)(pBytes + 1);
                 
                 // This should handle the odd address when trying to get
@@ -550,6 +550,20 @@ namespace System.Tests
         [InlineData("Goodbye", 0, "Hello", 0, 5, StringComparison.OrdinalIgnoreCase, -1)]
         [InlineData("HELLO", 2, "hello", 2, 3, StringComparison.OrdinalIgnoreCase, 0)]
         [InlineData("Hello", 2, "Goodbye", 2, 3, StringComparison.OrdinalIgnoreCase, -1)]
+        [InlineData("A", 0, "x", 0, 1, StringComparison.OrdinalIgnoreCase, -1)]
+        [InlineData("a", 0, "X", 0, 1, StringComparison.OrdinalIgnoreCase, -1)]
+        [InlineData("[", 0, "A", 0, 1, StringComparison.OrdinalIgnoreCase, 1)]
+        [InlineData("[", 0, "a", 0, 1, StringComparison.OrdinalIgnoreCase, 1)]
+        [InlineData("\\", 0, "A", 0, 1, StringComparison.OrdinalIgnoreCase, 1)]
+        [InlineData("\\", 0, "a", 0, 1, StringComparison.OrdinalIgnoreCase, 1)]
+        [InlineData("]", 0, "A", 0, 1, StringComparison.OrdinalIgnoreCase, 1)]
+        [InlineData("]", 0, "a", 0, 1, StringComparison.OrdinalIgnoreCase, 1)]
+        [InlineData("^", 0, "A", 0, 1, StringComparison.OrdinalIgnoreCase, 1)]
+        [InlineData("^", 0, "a", 0, 1, StringComparison.OrdinalIgnoreCase, 1)]
+        [InlineData("_", 0, "A", 0, 1, StringComparison.OrdinalIgnoreCase, 1)]
+        [InlineData("_", 0, "a", 0, 1, StringComparison.OrdinalIgnoreCase, 1)]
+        [InlineData("`", 0, "A", 0, 1, StringComparison.OrdinalIgnoreCase, 1)]
+        [InlineData("`", 0, "a", 0, 1, StringComparison.OrdinalIgnoreCase, 1)]
         [InlineData(null, 0, null, 0, 0, StringComparison.OrdinalIgnoreCase, 0)]
         [InlineData("Hello", 0, null, 0, 5, StringComparison.OrdinalIgnoreCase, 1)]
         [InlineData(null, 0, "Hello", 0, 5, StringComparison.OrdinalIgnoreCase, -1)]
@@ -702,15 +716,15 @@ namespace System.Tests
             Assert.Throws<ArgumentOutOfRangeException>("indexB", () => string.CompareOrdinal("a", 0, "bb", 3, 0)); // IndexB > strB.Length
 
             // Length < 0
-            Assert.Throws<ArgumentOutOfRangeException>("count", () => string.CompareOrdinal("a", 0, "bb", 0, -1));
+            Assert.Throws<ArgumentOutOfRangeException>("length", () => string.CompareOrdinal("a", 0, "bb", 0, -1));
 
             // We must validate arguments before any short-circuiting is done (besides for nulls)
-            Assert.Throws<ArgumentOutOfRangeException>("count", () => string.CompareOrdinal("foo", -1, "foo", -1, -1)); // count should be validated first
+            Assert.Throws<ArgumentOutOfRangeException>("length", () => string.CompareOrdinal("foo", -1, "foo", -1, -1)); // length should be validated first
             Assert.Throws<ArgumentOutOfRangeException>("indexA", () => string.CompareOrdinal("foo", -1, "foo", -1, 0)); // then indexA
             Assert.Throws<ArgumentOutOfRangeException>("indexB", () => string.CompareOrdinal("foo", 0, "foo", -1, 0)); // then indexB
             Assert.Throws<ArgumentOutOfRangeException>("indexA", () => string.CompareOrdinal("foo", 4, "foo", 4, 0)); // indexA > strA.Length first
             Assert.Throws<ArgumentOutOfRangeException>("indexB", () => string.CompareOrdinal("foo", 3, "foo", 4, 0)); // then indexB > strB.Length
-            Assert.Throws<ArgumentOutOfRangeException>("count", () => string.CompareOrdinal("foo", 0, "foo", 0, -1)); // early return should not kick in if count is invalid
+            Assert.Throws<ArgumentOutOfRangeException>("length", () => string.CompareOrdinal("foo", 0, "foo", 0, -1)); // early return should not kick in if length is invalid
         }
 
         [Theory]
@@ -802,7 +816,23 @@ namespace System.Tests
         }
 
         [Theory]
-        [ActiveIssue("dotnet/coreclr#2051", Xunit.PlatformID.AnyUnix)]
+        [InlineData("Hello", 'o', true)]
+        [InlineData("Hello", 'O', false)]
+        [InlineData("o", 'o', true)]
+        [InlineData("o", 'O', false)]
+        [InlineData("Hello", 'e', false)]
+        [InlineData("Hello", '\0', false)]
+        [InlineData("", '\0', false)]
+        [InlineData("\0", '\0', true)]
+        [InlineData("", 'a', false)]
+        [InlineData("abcdefghijklmnopqrstuvwxyz", 'z', true)]
+        public static void EndsWith(string s, char value, bool expected)
+        {
+            Assert.Equal(expected, s.EndsWith(value));
+        }
+
+        [Theory]
+        [ActiveIssue("dotnet/coreclr#2051", TestPlatforms.AnyUnix)]
         [InlineData(StringComparison.CurrentCulture)]
         [InlineData(StringComparison.CurrentCultureIgnoreCase)]
         [InlineData(StringComparison.Ordinal)]
@@ -1124,28 +1154,103 @@ namespace System.Tests
         [InlineData("Hello", 'x', 1, 4, -1)]
         [InlineData("Hello", 'o', 5, 0, -1)]
         [InlineData("H" + c_SoftHyphen + "ello", 'e', 0, 3, 2)]
+        // For some reason, this is failing on *nix with ordinal comparisons.
+        // Possibly related issue: dotnet/coreclr#2051
+        // [InlineData("Hello", '\0', 0, 5, -1)] // .NET strings are terminated with a null character, but they should not be included as part of the string
+        [InlineData("\ud800\udfff", '\ud800', 0, 1, 0)] // Surrogate characters
+        [InlineData("ABCDEFGHIJKLMNOPQRSTUVWXYZ", 'A', 0, 26, 0)]
+        [InlineData("ABCDEFGHIJKLMNOPQRSTUVWXYZ", 'B', 1, 25, 1)]
+        [InlineData("ABCDEFGHIJKLMNOPQRSTUVWXYZ", 'C', 2, 24, 2)]
+        [InlineData("ABCDEFGHIJKLMNOPQRSTUVWXYZ", 'D', 3, 23, 3)]
+        [InlineData("ABCDEFGHIJKLMNOPQRSTUVWXYZ", 'G', 2, 24, 6)]
+        [InlineData("ABCDEFGHIJKLMNOPQRSTUVWXYZ", 'K', 2, 24, 10)]
+        [InlineData("ABCDEFGHIJKLMNOPQRSTUVWXYZ", 'O', 2, 24, 14)]
+        [InlineData("ABCDEFGHIJKLMNOPQRSTUVWXYZ", 'P', 2, 24, 15)]
+        [InlineData("ABCDEFGHIJKLMNOPQRSTUVWXYZ", 'Q', 2, 24, 16)]
+        [InlineData("ABCDEFGHIJKLMNOPQRSTUVWXYZ", 'R', 2, 24, 17)]
+        [InlineData("________\u8080\u8080\u8080________", '\u0080', 0, 19, -1)]
+        [InlineData("________\u8000\u8000\u8000________", '\u0080', 0, 19, -1)]
+        [InlineData("__\u8080\u8000\u0080______________", '\u0080', 0, 19, 4)]
+        [InlineData("__\u8080\u8000__\u0080____________", '\u0080', 0, 19, 6)]
+        [InlineData("__________________________________", '\ufffd', 0, 34, -1)]
+        [InlineData("____________________________\ufffd", '\ufffd', 0, 29, 28)]
+        [InlineData("ABCDEFGHIJKLM", 'M', 0, 13, 12)]
+        [InlineData("ABCDEFGHIJKLMN", 'N', 0, 14, 13)]
+        [InlineData("ABCDEFGHIJKLMNOPQRSTUVWXYZ", '@', 0, 26, -1)]
+        [InlineData("ABCDEFGHIJKLMNOPQRSTUVWXY", '@', 0, 25, -1)]
+        [InlineData("ABCDEFGHIJKLMNOPQRSTUVWXYZ#", '@', 0, 27, -1)]
+        [InlineData("_____________\u807f", '\u007f', 0, 14, -1)]
+        [InlineData("_____________\u807f__", '\u007f', 0, 16, -1)]
+        [InlineData("_____________\u807f\u007f_", '\u007f', 0, 16, 14)]
+        [InlineData("__\u807f_______________", '\u007f', 0, 18, -1)]
+        [InlineData("__\u807f___\u007f___________", '\u007f', 0, 18, 6)]
+        [InlineData("ABCDEFGHIJKLMN", 'N', 2, 11, -1)]
+        [InlineData("!@#$%^&", '%', 0, 7, 4)]
+        [InlineData("!@#$", '!', 0, 4, 0)]
+        [InlineData("!@#$", '@', 0, 4, 1)]
+        [InlineData("!@#$", '#', 0, 4, 2)]
+        [InlineData("!@#$", '$', 0, 4, 3)]
+        [InlineData("!@#$%^&*", '%', 0, 8, 4)]
         public static void IndexOf_SingleLetter(string s, char target, int startIndex, int count, int expected)
         {
+            bool safeForCurrentCulture =
+                IsSafeForCurrentCultureComparisons(s)
+                && IsSafeForCurrentCultureComparisons(target.ToString());
+
             if (count + startIndex == s.Length)
             {
                 if (startIndex == 0)
                 {
                     Assert.Equal(expected, s.IndexOf(target));
-                    Assert.Equal(expected, s.IndexOf(target.ToString()));
+                    Assert.Equal(expected, s.IndexOf(target.ToString(), StringComparison.Ordinal));
+                    Assert.Equal(expected, s.IndexOf(target.ToString(), StringComparison.OrdinalIgnoreCase));
+
+                    // To be safe we only want to run CurrentCulture comparisons if
+                    // we know the results will not vary depending on location
+                    if (safeForCurrentCulture)
+                    {
+                        Assert.Equal(expected, s.IndexOf(target.ToString()));
+                        Assert.Equal(expected, s.IndexOf(target.ToString(), StringComparison.CurrentCulture));
+                    }
                 }
                 Assert.Equal(expected, s.IndexOf(target, startIndex));
-                Assert.Equal(expected, s.IndexOf(target.ToString(), startIndex));
+                Assert.Equal(expected, s.IndexOf(target.ToString(), startIndex, StringComparison.Ordinal));
+                Assert.Equal(expected, s.IndexOf(target.ToString(), startIndex, StringComparison.OrdinalIgnoreCase));
+
+                if (safeForCurrentCulture)
+                {
+                    Assert.Equal(expected, s.IndexOf(target.ToString(), startIndex));
+                    Assert.Equal(expected, s.IndexOf(target.ToString(), startIndex, StringComparison.CurrentCulture));
+                }
             }
             Assert.Equal(expected, s.IndexOf(target, startIndex, count));
-            Assert.Equal(expected, s.IndexOf(target.ToString(), startIndex, count));
-
-            Assert.Equal(expected, s.IndexOf(target.ToString(), startIndex, count, StringComparison.CurrentCulture));
             Assert.Equal(expected, s.IndexOf(target.ToString(), startIndex, count, StringComparison.Ordinal));
             Assert.Equal(expected, s.IndexOf(target.ToString(), startIndex, count, StringComparison.OrdinalIgnoreCase));
+
+            if (safeForCurrentCulture)
+            {
+                Assert.Equal(expected, s.IndexOf(target.ToString(), startIndex, count));
+                Assert.Equal(expected, s.IndexOf(target.ToString(), startIndex, count, StringComparison.CurrentCulture));
+            }
+        }
+
+        private static bool IsSafeForCurrentCultureComparisons(string str)
+        {
+            for (int i = 0; i < str.Length; i++)
+            {
+                char c = str[i];
+                // We only want ASCII chars that you can see
+                // No controls, no delete, nothing >= 0x80
+                if (c < 0x20 || c == 0x7f || c >= 0x80)
+                {
+                    return false;
+                }
+            }
+            return true;
         }
 
         [Theory]
-        [ActiveIssue("dotnet/coreclr#2051", Xunit.PlatformID.AnyUnix)]
+        [ActiveIssue("dotnet/coreclr#2051", TestPlatforms.AnyUnix)]
         [InlineData("He\0lo", "He\0lo", 0)]
         [InlineData("He\0lo", "He\0", 0)]
         [InlineData("He\0lo", "\0", 2)]
@@ -1543,8 +1648,8 @@ namespace System.Tests
             yield return new object[] { null, new object[] { "Foo", "Bar", "Baz" }, "FooBarBaz" };
             yield return new object[] { "$$", new object[] { "Foo", null, "Baz" }, "Foo$$$$Baz" };
 
-            // Join does nothing if array[0] is null
-            yield return new object[] { "$$", new object[] { null, "Bar", "Baz" }, "" };
+            // Test join when first value is null
+            yield return new object[] { "$$", new object[] { null, "Bar", "Baz" }, "$$Bar$$Baz" };
 
             // Join should ignore objects that have a null ToString() value
             yield return new object[] { "|", new object[] { new ObjectWithNullToString(), "Foo", new ObjectWithNullToString(), "Bar", new ObjectWithNullToString() }, "|Foo||Bar|" };
@@ -1552,13 +1657,23 @@ namespace System.Tests
 
         [Theory]
         [MemberData(nameof(Join_ObjectArray_TestData))]
+        [SkipOnTargetFramework(TargetFrameworkMonikers.NetFramework | TargetFrameworkMonikers.NetcoreUwp)]
         public static void Join_ObjectArray(string separator, object[] values, string expected)
         {
             Assert.Equal(expected, string.Join(separator, values));
-            if (!(values.Length > 0 && values[0] == null))
-            {
-                Assert.Equal(expected, string.Join(separator, (IEnumerable<object>)values));
-            }
+            Assert.Equal(expected, string.Join(separator, (IEnumerable<object>)values));
+        }
+
+        [Theory]
+        [MemberData(nameof(Join_ObjectArray_TestData))]
+        [SkipOnTargetFramework(TargetFrameworkMonikers.Netcoreapp)]
+        public static void Join_ObjectArray_WithNullIssue(string separator, object[] values, string expected)
+        {
+            string enumerableExpected = expected;
+            if (values.Length > 0 && values[0] == null) // Join return nothing when first value is null
+                expected = "";
+            Assert.Equal(expected, string.Join(separator, values));
+            Assert.Equal(enumerableExpected, string.Join(separator, (IEnumerable<object>)values));
         }
 
         [Fact]
@@ -1604,7 +1719,7 @@ namespace System.Tests
         }
 
         [Theory]
-        [ActiveIssue("dotnet/coreclr#2051", Xunit.PlatformID.AnyUnix)]
+        [ActiveIssue("dotnet/coreclr#2051", TestPlatforms.AnyUnix)]
         [InlineData("He\0lo", "He\0lo", 0)]
         [InlineData("He\0lo", "He\0", 0)]
         [InlineData("He\0lo", "\0", 2)]
@@ -1998,7 +2113,23 @@ namespace System.Tests
         }
 
         [Theory]
-        [ActiveIssue("dotnet/coreclr#2051", Xunit.PlatformID.AnyUnix)]
+        [InlineData("Hello", 'H', true)]
+        [InlineData("Hello", 'h', false)]
+        [InlineData("H", 'H', true)]
+        [InlineData("H", 'h', false)]
+        [InlineData("Hello", 'e', false)]
+        [InlineData("Hello", '\0', false)]
+        [InlineData("", '\0', false)]
+        [InlineData("\0", '\0', true)]
+        [InlineData("", 'a', false)]
+        [InlineData("abcdefghijklmnopqrstuvwxyz", 'a', true)]
+        public static void StartsWith(string s, char value, bool expected)
+        {
+            Assert.Equal(expected, s.StartsWith(value));
+        }
+
+        [Theory]
+        [ActiveIssue("dotnet/coreclr#2051", TestPlatforms.AnyUnix)]
         [InlineData(StringComparison.CurrentCulture)]
         [InlineData(StringComparison.CurrentCultureIgnoreCase)]
         [InlineData(StringComparison.Ordinal)]
@@ -2020,6 +2151,7 @@ namespace System.Tests
             // Value is null
             Assert.Throws<ArgumentNullException>("value", () => s.StartsWith(null));
             Assert.Throws<ArgumentNullException>("value", () => s.StartsWith(null, StringComparison.CurrentCultureIgnoreCase));
+
             Assert.Throws<ArgumentNullException>("value", () => s.StartsWith(null, StringComparison.Ordinal));
             Assert.Throws<ArgumentNullException>("value", () => s.StartsWith(null, StringComparison.OrdinalIgnoreCase));
 
@@ -2227,6 +2359,12 @@ namespace System.Tests
             {
                 Assert.Equal(expected, s.Trim());
             }
+
+            if (trimChars?.Length == 1)
+            {
+                Assert.Equal(expected, s.Trim(trimChars[0]));
+            }
+
             Assert.Equal(expected, s.Trim(trimChars));
         }
 
@@ -2245,6 +2383,12 @@ namespace System.Tests
             {
                 Assert.Equal(expected, s.TrimEnd());
             }
+
+            if (trimChars?.Length == 1)
+            {
+                Assert.Equal(expected, s.TrimEnd(trimChars[0]));
+            }
+
             Assert.Equal(expected, s.TrimEnd(trimChars));
         }
 
@@ -2263,6 +2407,12 @@ namespace System.Tests
             {
                 Assert.Equal(expected, s.TrimStart());
             }
+
+            if (trimChars?.Length == 1)
+            {
+                Assert.Equal(expected, s.TrimStart(trimChars[0]));
+            }
+
             Assert.Equal(expected, s.TrimStart(trimChars));
         }
 

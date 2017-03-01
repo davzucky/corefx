@@ -21,7 +21,7 @@ namespace System.Reflection.Metadata
     /// A default-initialized instance is useless and behaves as a null reference.
     ///
     /// The code is optimized such that there is no additional overhead in
-    /// re-obtaining a a comparer over hoisting it in to a local.
+    /// re-obtaining a comparer over hoisting it in to a local.
     /// 
     /// That is to say that a construct like:
     ///
@@ -68,7 +68,7 @@ namespace System.Reflection.Metadata
                 Throw.ValueArgumentNull();
             }
 
-            return _reader.StringStream.Equals(handle, value, _reader.utf8Decoder, ignoreCase);
+            return _reader.StringHeap.Equals(handle, value, _reader.UTF8Decoder, ignoreCase);
         }
 
         public bool Equals(NamespaceDefinitionHandle handle, string value)
@@ -85,10 +85,10 @@ namespace System.Reflection.Metadata
 
             if (handle.HasFullName)
             {
-                return _reader.StringStream.Equals(handle.GetFullName(), value, _reader.utf8Decoder, ignoreCase);
+                return _reader.StringHeap.Equals(handle.GetFullName(), value, _reader.UTF8Decoder, ignoreCase);
             }
 
-            return value == _reader.namespaceCache.GetFullName(handle);
+            return value == _reader.NamespaceCache.GetFullName(handle);
         }
 
         public bool Equals(DocumentNameBlobHandle handle, string value)
@@ -103,7 +103,7 @@ namespace System.Reflection.Metadata
                 Throw.ValueArgumentNull();
             }
 
-            return _reader.BlobStream.DocumentNameEquals(handle, value, ignoreCase);
+            return _reader.BlobHeap.DocumentNameEquals(handle, value, ignoreCase);
         }
 
         public bool StartsWith(StringHandle handle, string value)
@@ -118,7 +118,7 @@ namespace System.Reflection.Metadata
                 Throw.ValueArgumentNull();
             }
 
-            return _reader.StringStream.StartsWith(handle, value, _reader.utf8Decoder, ignoreCase);
+            return _reader.StringHeap.StartsWith(handle, value, _reader.UTF8Decoder, ignoreCase);
         }
     }
 }

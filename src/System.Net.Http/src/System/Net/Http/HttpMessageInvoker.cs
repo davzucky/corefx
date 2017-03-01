@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for more information.
 
-using System.Diagnostics.Contracts;
 using System.IO;
 using System.Net.Http.Headers;
 using System.Threading;
@@ -23,19 +22,19 @@ namespace System.Net.Http
 
         public HttpMessageInvoker(HttpMessageHandler handler, bool disposeHandler)
         {
-            if (NetEventSource.Log.IsEnabled()) NetEventSource.Enter(NetEventSource.ComponentType.Http, this, ".ctor", handler);
+            if (NetEventSource.IsEnabled) NetEventSource.Enter(this, handler);
 
             if (handler == null)
             {
                 throw new ArgumentNullException(nameof(handler));
             }
 
-            if (HttpEventSource.Log.IsEnabled()) HttpEventSource.Associate(this, handler);
+            if (NetEventSource.IsEnabled) NetEventSource.Associate(this, handler);
 
             _handler = handler;
             _disposeHandler = disposeHandler;
 
-            if (NetEventSource.Log.IsEnabled()) NetEventSource.Exit(NetEventSource.ComponentType.Http, this, ".ctor", null);
+            if (NetEventSource.IsEnabled) NetEventSource.Exit(this);
         }
 
         public virtual Task<HttpResponseMessage> SendAsync(HttpRequestMessage request,
@@ -47,13 +46,11 @@ namespace System.Net.Http
             }
             CheckDisposed();
 
-            if (NetEventSource.Log.IsEnabled())
-                NetEventSource.Enter(NetEventSource.ComponentType.Http, this, "SendAsync",
-    LoggingHash.GetObjectLogHash(request) + ": " + request);
+            if (NetEventSource.IsEnabled) NetEventSource.Enter(this, request);
 
             Task<HttpResponseMessage> task = _handler.SendAsync(request, cancellationToken);
 
-            if (NetEventSource.Log.IsEnabled()) NetEventSource.Exit(NetEventSource.ComponentType.Http, this, "SendAsync", task);
+            if (NetEventSource.IsEnabled) NetEventSource.Exit(this, task);
 
             return task;
         }

@@ -88,7 +88,7 @@ namespace Microsoft.CSharp.RuntimeBinder.Semantics
             SetTypeArgsAll(pOuterTypeArgs);
         }
 
-        public void SetTypeArgsAll(TypeArray outerTypeArgs)
+        private void SetTypeArgsAll(TypeArray outerTypeArgs)
         {
             Debug.Assert(_pTypeArgsThis != null);
 
@@ -133,7 +133,7 @@ namespace Microsoft.CSharp.RuntimeBinder.Semantics
             _pTypeArgsAll = pTypeManager.ConcatenateTypeArrays(pCheckedOuterTypeArgs, _pTypeArgsThis);
         }
 
-        public bool AreAllTypeArgumentsUnitTypes(TypeArray typeArray)
+        private bool AreAllTypeArgumentsUnitTypes(TypeArray typeArray)
         {
             if (typeArray.Size == 0)
             {
@@ -195,25 +195,25 @@ namespace Microsoft.CSharp.RuntimeBinder.Semantics
         public TypeArray GetDelegateParameters(SymbolLoader pSymbolLoader)
         {
             Debug.Assert(isDelegateType());
-            MethodSymbol invoke = pSymbolLoader.LookupInvokeMeth(this.getAggregate());
+            MethodSymbol invoke = pSymbolLoader.LookupInvokeMeth(getAggregate());
             if (invoke == null || !invoke.isInvoke())
             {
                 // This can happen if the delegate is internal to another assembly. 
                 return null;
             }
-            return this.getAggregate().GetTypeManager().SubstTypeArray(invoke.Params, this);
+            return getAggregate().GetTypeManager().SubstTypeArray(invoke.Params, this);
         }
 
         public CType GetDelegateReturnType(SymbolLoader pSymbolLoader)
         {
             Debug.Assert(isDelegateType());
-            MethodSymbol invoke = pSymbolLoader.LookupInvokeMeth(this.getAggregate());
+            MethodSymbol invoke = pSymbolLoader.LookupInvokeMeth(getAggregate());
             if (invoke == null || !invoke.isInvoke())
             {
                 // This can happen if the delegate is internal to another assembly. 
                 return null;
             }
-            return this.getAggregate().GetTypeManager().SubstType(invoke.RetType, this);
+            return getAggregate().GetTypeManager().SubstType(invoke.RetType, this);
         }
     }
 }

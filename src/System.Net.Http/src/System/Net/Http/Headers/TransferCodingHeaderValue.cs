@@ -3,7 +3,9 @@
 // See the LICENSE file in the project root for more information.
 
 using System.Collections.Generic;
-using System.Diagnostics.Contracts;
+using System.Diagnostics;
+using System.IO;
+using System.Text;
 
 namespace System.Net.Http.Headers
 {
@@ -36,7 +38,7 @@ namespace System.Net.Http.Headers
 
         protected TransferCodingHeaderValue(TransferCodingHeaderValue source)
         {
-            Contract.Requires(source != null);
+            Debug.Assert(source != null);
 
             _value = source._value;
 
@@ -51,7 +53,7 @@ namespace System.Net.Http.Headers
 
         public TransferCodingHeaderValue(string value)
         {
-            HeaderUtilities.CheckValidToken(value, "value");
+            HeaderUtilities.CheckValidToken(value, nameof(value));
             _value = value;
         }
 
@@ -79,8 +81,8 @@ namespace System.Net.Http.Headers
         internal static int GetTransferCodingLength(string input, int startIndex,
             Func<TransferCodingHeaderValue> transferCodingCreator, out TransferCodingHeaderValue parsedValue)
         {
-            Contract.Requires(transferCodingCreator != null);
-            Contract.Requires(startIndex >= 0);
+            Debug.Assert(transferCodingCreator != null);
+            Debug.Assert(startIndex >= 0);
 
             parsedValue = null;
 
@@ -130,7 +132,10 @@ namespace System.Net.Http.Headers
 
         public override string ToString()
         {
-            return _value + NameValueHeaderValue.ToString(_parameters, ';', true);
+            StringBuilder sb = StringBuilderCache.Acquire();
+            sb.Append(_value);
+            NameValueHeaderValue.ToString(_parameters, ';', true, sb);
+            return StringBuilderCache.GetStringAndRelease(sb);
         }
 
         public override bool Equals(object obj)

@@ -2,13 +2,13 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for more information.
 
-using System.Diagnostics.Contracts;
+using System.Diagnostics;
 
 namespace System.IO
 {
     internal static partial class PathHelpers
     {
-        // Trim trailing white spaces, tabs etc but don't be aggressive in removing everything that has UnicodeCategory of trailing space.
+        // Trim trailing whitespace, tabs etc but don't be aggressive in removing everything that has UnicodeCategory of trailing space.
         // String.WhitespaceChars will trim more aggressively than what the underlying FS does (for ex, NTFS, FAT).    
         internal static readonly char[] TrimEndChars = { (char)0x9, (char)0xA, (char)0xB, (char)0xC, (char)0xD, (char)0x20, (char)0x85, (char)0xA0 };
         internal static readonly char[] TrimStartChars = { ' ' };
@@ -86,7 +86,7 @@ namespace System.IO
 
         internal static string NormalizeSearchPattern(string searchPattern)
         {
-            Contract.Requires(searchPattern != null);
+            Debug.Assert(searchPattern != null);
 
             // Win32 normalization trims only U+0020.
             string tempSearchPattern = searchPattern.TrimEnd(PathHelpers.TrimEndChars);
@@ -103,8 +103,8 @@ namespace System.IO
 
         internal static string GetFullSearchString(string fullPath, string searchPattern)
         {
-            Contract.Requires(fullPath != null);
-            Contract.Requires(searchPattern != null);
+            Debug.Assert(fullPath != null);
+            Debug.Assert(searchPattern != null);
 
             ThrowIfEmptyOrRootedPath(searchPattern);
             string tempStr = Path.Combine(fullPath, searchPattern);

@@ -12,12 +12,13 @@
 using Microsoft.Win32;
 using System;
 using System.Collections;
+using System.Diagnostics;
+using System.Diagnostics.Contracts;
+using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Security.Principal;
 using System.Threading;
-using System.Diagnostics.Contracts;
-using System.Reflection;
 
 namespace System.Security.AccessControl
 {
@@ -48,14 +49,14 @@ namespace System.Security.AccessControl
         
         // only these SACL control flags will be automatically carry forward
         // when update with new security descriptor.
-        static private readonly ControlFlags SACL_CONTROL_FLAGS = 
+        private static readonly ControlFlags SACL_CONTROL_FLAGS = 
             ControlFlags.SystemAclPresent | 
             ControlFlags.SystemAclAutoInherited |
             ControlFlags.SystemAclProtected;
 
         // only these DACL control flags will be automatically carry forward
         // when update with new security descriptor
-        static private readonly ControlFlags DACL_CONTROL_FLAGS = 
+        private static readonly ControlFlags DACL_CONTROL_FLAGS = 
             ControlFlags.DiscretionaryAclPresent | 
             ControlFlags.DiscretionaryAclAutoInherited |
             ControlFlags.DiscretionaryAclProtected;
@@ -94,7 +95,7 @@ namespace System.Security.AccessControl
 
         private void UpdateWithNewSecurityDescriptor( RawSecurityDescriptor newOne, AccessControlSections includeSections )
         {
-            Contract.Assert( newOne != null, "Must not supply a null parameter here" );
+            Debug.Assert( newOne != null, "Must not supply a null parameter here" );
 
             if (( includeSections & AccessControlSections.Owner ) != 0 )
             {

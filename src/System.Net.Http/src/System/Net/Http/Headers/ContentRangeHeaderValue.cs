@@ -2,8 +2,9 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for more information.
 
-using System.Diagnostics.Contracts;
+using System.Diagnostics;
 using System.Globalization;
+using System.IO;
 using System.Text;
 
 namespace System.Net.Http.Headers
@@ -20,7 +21,7 @@ namespace System.Net.Http.Headers
             get { return _unit; }
             set
             {
-                HeaderUtilities.CheckValidToken(value, "value");
+                HeaderUtilities.CheckValidToken(value, nameof(value));
                 _unit = value;
             }
         }
@@ -110,7 +111,7 @@ namespace System.Net.Http.Headers
 
         private ContentRangeHeaderValue(ContentRangeHeaderValue source)
         {
-            Contract.Requires(source != null);
+            Debug.Assert(source != null);
 
             _from = source._from;
             _to = source._to;
@@ -150,7 +151,8 @@ namespace System.Net.Http.Headers
 
         public override string ToString()
         {
-            StringBuilder sb = new StringBuilder(_unit);
+            StringBuilder sb = StringBuilderCache.Acquire();
+            sb.Append(_unit);
             sb.Append(' ');
 
             if (HasRange)
@@ -174,7 +176,7 @@ namespace System.Net.Http.Headers
                 sb.Append('*');
             }
 
-            return sb.ToString();
+            return StringBuilderCache.GetStringAndRelease(sb);
         }
 
         public static ContentRangeHeaderValue Parse(string input)
@@ -199,7 +201,7 @@ namespace System.Net.Http.Headers
 
         internal static int GetContentRangeLength(string input, int startIndex, out object parsedValue)
         {
-            Contract.Requires(startIndex >= 0);
+            Debug.Assert(startIndex >= 0);
 
             parsedValue = null;
 

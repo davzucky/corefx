@@ -6,10 +6,26 @@ using System.Collections.Generic;
 using System.Linq;
 using Xunit;
 
-namespace System.ComponentModel.DataAnnotations
+namespace System.ComponentModel.DataAnnotations.Tests
 {
-    public class DataTypeAttributeTests
+    public class DataTypeAttributeTests : ValidationAttributeTestBase
     {
+        protected override IEnumerable<TestCase> ValidValues()
+        {
+            foreach (DataType dataType in s_dataTypes)
+            {
+                if (dataType != DataType.Custom)
+                {
+                    yield return new TestCase(new DataTypeAttribute(dataType), new object());
+                }
+            }
+            yield return new TestCase(new DataTypeAttribute("CustomDataType"), new object());
+            yield return new TestCase(new DataTypeAttribute((DataType)(-1)), new object());
+            yield return new TestCase(new DataTypeAttribute(DataType.Upload + 1), new object());
+        }
+
+        protected override IEnumerable<TestCase> InvalidValues() => new TestCase[0];
+
         private static readonly ValidationContext s_testValidationContext = new ValidationContext(new object());
 
         private static readonly DataType[] s_dataTypes = (DataType[])Enum.GetValues(typeof(DataType));
@@ -50,28 +66,9 @@ namespace System.ComponentModel.DataAnnotations
         }
 
         [Theory]
-        [InlineData((DataType)(-1))]
-        [InlineData(DataType.Upload + 1)]
-        public static void Validate_InvalidDataType_DoesNotThrow(DataType dataType)
-        {
-            DataTypeAttribute attribute = new DataTypeAttribute(dataType);
-            attribute.Validate(new object(), s_testValidationContext);
-        }
-
-        [Theory]
-        [MemberData(nameof(DataTypes_TestData))]
-        public static void Validate_DoesNotThrow(DataType dataType)
-        {
-            if (dataType != DataType.Custom)
-            {
-                DataTypeAttribute attribute = new DataTypeAttribute(dataType);
-                attribute.Validate(new object(), s_testValidationContext);
-            }
-        }
-
-        [Theory]
         [InlineData("CustomValue")]
         [InlineData("")]
+        [InlineData(" ")]
         [InlineData(null)]
         public static void Ctor_String(string customDataType)
         {
@@ -79,7 +76,7 @@ namespace System.ComponentModel.DataAnnotations
             Assert.Equal(DataType.Custom, attribute.DataType);
             Assert.Equal(customDataType, attribute.CustomDataType);
 
-            if (string.IsNullOrEmpty(customDataType))
+            if (string.IsNullOrWhiteSpace(customDataType))
             {
                 Assert.Throws<InvalidOperationException>(() => attribute.GetDataTypeName());
                 Assert.Throws<InvalidOperationException>(() => attribute.Validate(new object(), s_testValidationContext));
@@ -87,7 +84,6 @@ namespace System.ComponentModel.DataAnnotations
             else
             {
                 Assert.Equal(customDataType, attribute.GetDataTypeName());
-                attribute.Validate(new object(), s_testValidationContext);
             }
         }
 

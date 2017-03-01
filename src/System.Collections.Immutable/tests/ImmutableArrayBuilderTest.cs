@@ -75,6 +75,9 @@ namespace System.Collections.Immutable.Tests
             builder.AddRange((IEnumerable<int>)new[] { 2 });
             Assert.Equal(2, builder.Count);
 
+            builder.AddRange((IEnumerable<int>)new int[0]);
+            Assert.Equal(2, builder.Count);
+
             // Exceed capacity
             builder.AddRange(Enumerable.Range(3, 2)); // use an enumerable without a breakable Count
             Assert.Equal(4, builder.Count);
@@ -288,10 +291,18 @@ namespace System.Collections.Immutable.Tests
         [Fact]
         public void Sort_Comparison()
         {
-            var builder = new ImmutableArray<int>.Builder();
+            var builder = new ImmutableArray<int>.Builder(4);
+
+            builder.Sort((x, y) => y.CompareTo(x));
+            Assert.Equal(Array.Empty<int>(), builder);
+
             builder.AddRange(2, 4, 1, 3);
             builder.Sort((x, y) => y.CompareTo(x));
             Assert.Equal(new[] { 4, 3, 2, 1 }, builder);
+
+            builder.Add(5);
+            builder.Sort((x, y) => x.CompareTo(y));
+            Assert.Equal(new[] { 1, 2, 3, 4, 5 }, builder);
         }
 
         [Fact]

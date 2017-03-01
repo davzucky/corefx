@@ -9,7 +9,7 @@ using Microsoft.CSharp.RuntimeBinder.Syntax;
 
 namespace Microsoft.CSharp.RuntimeBinder.Semantics
 {
-    internal partial class ExpressionBinder
+    internal sealed partial class ExpressionBinder
     {
         ////////////////////////////////////////////////////////////////////////////////
         // This table is used to implement the last set of 'better' conversion rules
@@ -17,7 +17,7 @@ namespace Microsoft.CSharp.RuntimeBinder.Semantics
         // Use all the simple types plus 1 more for Object
         // See CLR section 7.4.1.3
 
-        static private readonly byte[][] s_betterConversionTable =
+        private static readonly byte[][] s_betterConversionTable =
         {
             //          BYTE    SHORT   INT     LONG    FLOAT   DOUBLE  DECIMAL CHAR    BOOL    SBYTE   USHORT  UINT    ULONG   IPTR     UIPTR    OBJECT
             new byte[] /* BYTE*/   {0,     0,      0,      0,      0,      0,      0,      0,      0,      2,      0,      0,      0,      0,       0,       0},
@@ -38,7 +38,7 @@ namespace Microsoft.CSharp.RuntimeBinder.Semantics
             new byte[] /* OBJECT*/ {0,     0,      0,      0,      0,      0,      0,      0,      0,      0,      0,      0,      0,      0,       0,       0}
         };
 
-        protected BetterType WhichMethodIsBetterTieBreaker(
+        private BetterType WhichMethodIsBetterTieBreaker(
             CandidateFunctionMember node1,
             CandidateFunctionMember node2,
             CType pTypeThrough,
@@ -203,7 +203,7 @@ namespace Microsoft.CSharp.RuntimeBinder.Semantics
         //
         // Returns Left if m1 is better, Right if m2 is better, or Neither/Same
 
-        protected BetterType WhichMethodIsBetter(
+        private BetterType WhichMethodIsBetter(
             CandidateFunctionMember node1,
             CandidateFunctionMember node2,
             CType pTypeThrough,
@@ -237,8 +237,8 @@ namespace Microsoft.CSharp.RuntimeBinder.Semantics
             BetterType betterMethod = BetterType.Neither;
             CType type1 = pTypeThrough != null ? pTypeThrough : mpwi1.GetType();
             CType type2 = pTypeThrough != null ? pTypeThrough : mpwi2.GetType();
-            MethodOrPropertySymbol methProp1 = ExpressionBinder.GroupToArgsBinder.FindMostDerivedMethod(GetSymbolLoader(), mpwi1.MethProp(), type1);
-            MethodOrPropertySymbol methProp2 = ExpressionBinder.GroupToArgsBinder.FindMostDerivedMethod(GetSymbolLoader(), mpwi2.MethProp(), type2);
+            MethodOrPropertySymbol methProp1 = GroupToArgsBinder.FindMostDerivedMethod(GetSymbolLoader(), mpwi1.MethProp(), type1);
+            MethodOrPropertySymbol methProp2 = GroupToArgsBinder.FindMostDerivedMethod(GetSymbolLoader(), mpwi2.MethProp(), type2);
             List<Name> names1 = methProp1.ParameterNames;
             List<Name> names2 = methProp2.ParameterNames;
 
@@ -318,7 +318,7 @@ namespace Microsoft.CSharp.RuntimeBinder.Semantics
             return betterMethod;
         }
 
-        protected BetterType WhichConversionIsBetter(EXPR arg, CType argType,
+        private BetterType WhichConversionIsBetter(EXPR arg, CType argType,
             CType p1, CType p2)
         {
             Debug.Assert(argType != null);
@@ -352,7 +352,7 @@ namespace Microsoft.CSharp.RuntimeBinder.Semantics
             return WhichConversionIsBetter(argType, p1, p2);
         }
 
-        public BetterType WhichConversionIsBetter(CType argType,
+        private BetterType WhichConversionIsBetter(CType argType,
             CType p1, CType p2)
         {
             // 7.4.2.4 Better conversion from type
@@ -419,8 +419,7 @@ namespace Microsoft.CSharp.RuntimeBinder.Semantics
         ////////////////////////////////////////////////////////////////////////////////
         // Determine best method for overload resolution. Returns null if no best 
         // method, in which case two tying methods are returned for error reporting.
-
-        protected CandidateFunctionMember FindBestMethod(
+        private CandidateFunctionMember FindBestMethod(
             List<CandidateFunctionMember> list,
             CType pTypeThrough,
             ArgInfos args,

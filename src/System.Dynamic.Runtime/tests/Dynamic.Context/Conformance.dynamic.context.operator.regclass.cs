@@ -861,7 +861,7 @@ namespace ManagedTests.DynamicCSharp.Conformance.dynamic.context.operate.regclas
         }
     }
 
-    static public class Extension
+    public static class Extension
     {
         public static MyEnum ExReturnMyEnum(this MyClass mc)
         {
@@ -1734,7 +1734,7 @@ namespace ManagedTests.DynamicCSharp.Conformance.dynamic.context.operate.regclas
 
     public class Test
     {
-        [Fact]
+        [ConditionalFact(nameof(PlatformDetection) + "." + nameof(PlatformDetection.IsNotWindowsSubsystemForLinux))] // https://github.com/Microsoft/BashOnWindows/issues/513
         public static void DynamicCSharpRunTest()
         {
             Assert.Equal(0, MainMethod());
@@ -2817,7 +2817,7 @@ namespace ManagedTests.DynamicCSharp.Conformance.dynamic.context.operate.regclas
         }
     }
 
-    static public class Extension
+    public static class Extension
     {
         public static int Method(this MyEnum[] mea)
         {
@@ -3068,7 +3068,7 @@ namespace ManagedTests.DynamicCSharp.Conformance.dynamic.context.operate.regclas
         }
     }
 
-    static public class Extension
+    public static class Extension
     {
         public static float? ExReturnFloat(this MyStruct mc)
         {

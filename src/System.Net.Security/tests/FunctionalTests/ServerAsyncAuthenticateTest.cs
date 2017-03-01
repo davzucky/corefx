@@ -15,6 +15,8 @@ using Xunit.Abstractions;
 
 namespace System.Net.Security.Tests
 {
+    using Configuration = System.Net.Test.Common.Configuration;
+
     public class ServerAsyncAuthenticateTest : IDisposable
     {
         private readonly ITestOutputHelper _log;
@@ -35,6 +37,7 @@ namespace System.Net.Security.Tests
 
         [Theory]
         [ClassData(typeof(SslProtocolSupport.SupportedSslProtocolsTestData))]
+        [ActiveIssue(16516, TestPlatforms.Windows)]
         public async Task ServerAsyncAuthenticate_EachSupportedProtocol_Success(SslProtocols protocol)
         {
             await ServerAsyncSslHelper(protocol, protocol);
@@ -72,7 +75,7 @@ namespace System.Net.Security.Tests
         }
 
         [Fact]
-        public async Task ServerAsyncAuthenticate_UnsuportedAllServer_Fail()
+        public async Task ServerAsyncAuthenticate_UnsupportedAllServer_Fail()
         {
             await Assert.ThrowsAsync<NotSupportedException>(() =>
             {
@@ -85,6 +88,7 @@ namespace System.Net.Security.Tests
 
         [Theory]
         [ClassData(typeof(SslProtocolSupport.SupportedSslProtocolsTestData))]
+        [ActiveIssue(16516, TestPlatforms.Windows)]
         public async Task ServerAsyncAuthenticate_AllClientVsIndividualServerSupportedProtocols_Success(
             SslProtocols serverProtocol)
         {

@@ -6,6 +6,7 @@
 #include "pal_errno.h"
 #include "pal_io.h"
 #include "pal_utilities.h"
+#include "pal_safecrt.h"
 
 #include <assert.h>
 #include <errno.h>
@@ -20,13 +21,14 @@
 #include <sys/types.h>
 #include <sys/file.h>
 #include <sys/ioctl.h>
+#include <sys/socket.h>
 #include <syslog.h>
 #include <termios.h>
 #include <unistd.h>
 #include <limits.h>
 #if HAVE_FCOPYFILE
 #include <copyfile.h>
-#elif HAVE_SENDFILE
+#elif HAVE_SENDFILE_4
 #include <sys/sendfile.h>
 #endif
 #if HAVE_INOTIFY
@@ -289,9 +291,16 @@ extern "C" intptr_t SystemNative_ShmOpen(const char* name, int32_t flags, int32_
 
 extern "C" int32_t SystemNative_ShmUnlink(const char* name)
 {
+#if HAVE_SHM_OPEN_THAT_WORKS_WELL_ENOUGH_WITH_MMAP
     int32_t result;
     while (CheckInterrupted(result = shm_unlink(name)));
     return result;
+#else
+    // Not supported on e.g. Android. Also, prevent a compiler error because name is unused
+    (void)name;
+    errno = ENOTSUP;
+    return -1;
+#endif
 }
 
 static void ConvertDirent(const dirent& entry, DirectoryEntry* outputEntry)
@@ -382,7 +391,7 @@ extern "C" int32_t SystemNative_ReadDirR(DIR* dir, void* buffer, int32_t bufferS
     }
 
     assert(result->d_reclen <= bufferSize);
-    memcpy(entry, result, static_cast<size_t>(result->d_reclen));
+    memcpy_s(entry, sizeof(dirent), result, static_cast<size_t>(result->d_reclen));
 #endif
     ConvertDirent(*entry, outputEntry);
     return 0;
@@ -575,7 +584,45 @@ extern "C" int32_t SystemNative_Link(const char* source, const char* linkTarget)
 extern "C" intptr_t SystemNative_MksTemps(char* pathTemplate, int32_t suffixLength)
 {
     intptr_t result;
+#if HAVE_MKSTEMPS
     while (CheckInterrupted(result = mkstemps(pathTemplate, suffixLength)));
+#elif HAVE_MKSTEMP
+    // mkstemps is not available bionic/Android, but mkstemp is
+    // mkstemp doesn't allow the suffix that msktemps does allow, so we'll need to
+    // remove that before passing pathTemplate to mkstemp
+
+    int32_t pathTemplateLength = static_cast<int32_t>(strlen(pathTemplate));
+
+    // pathTemplate must include at least XXXXXX (6 characters) which are not part of
+    // the suffix
+    if (suffixLength < 0 || suffixLength > pathTemplateLength - 6)
+    {
+        errno = EINVAL;
+        return -1;
+    }
+
+    // Make mkstemp ignore the suffix by setting the first char of the suffix to \0,
+    // if there is a suffix
+    int32_t firstSuffixIndex = 0;
+    char firstSuffixChar = 0;
+
+    if (suffixLength > 0)
+    {
+        firstSuffixIndex = pathTemplateLength - suffixLength;
+        firstSuffixChar = pathTemplate[firstSuffixIndex];
+        pathTemplate[firstSuffixIndex] = 0;
+    }
+
+    while (CheckInterrupted(result = mkstemp(pathTemplate)));
+
+    // Reset the first char of the suffix back to its original value, if there is a suffix
+    if (suffixLength > 0)
+    {
+        pathTemplate[firstSuffixIndex] = firstSuffixChar;
+    }
+#else
+#error "Cannot find mkstemps nor mkstemp on this platform"
+#endif
     return  result;
 }
 
@@ -777,6 +824,8 @@ extern "C" int64_t SystemNative_SysConf(SysConfName name)
             return sysconf(_SC_CLK_TCK);
         case PAL_SC_PAGESIZE:
             return sysconf(_SC_PAGESIZE);
+        case PAL_SC_NPROCESSORS_ONLN:
+            return sysconf(_SC_NPROCESSORS_ONLN);
     }
 
     assert(false && "Unknown SysConfName");
@@ -803,9 +852,18 @@ extern "C" Error SystemNative_Poll(PollEvent* pollEvents, uint32_t eventCount, i
         return PAL_EINVAL;
     }
 
-    size_t bufferSize = sizeof(pollfd) * static_cast<size_t>(eventCount);
+    size_t bufferSize;
+    if (!multiply_s(sizeof(pollfd), static_cast<size_t>(eventCount), &bufferSize))
+    {
+        return SystemNative_ConvertErrorPlatformToPal(EOVERFLOW);        
+    }
+
     bool useStackBuffer = bufferSize <= 2048;
     pollfd* pollfds = reinterpret_cast<pollfd*>(useStackBuffer ? alloca(bufferSize) : malloc(bufferSize));
+    if (pollfds == nullptr)
+    {
+        return PAL_ENOMEM;
+    }
 
     for (uint32_t i = 0; i < eventCount; i++)
     {
@@ -1011,7 +1069,7 @@ extern "C" int32_t SystemNative_CopyFile(intptr_t sourceFd, intptr_t destination
     int ret;
     struct stat_ sourceStat;
     bool copied = false;
-#if HAVE_SENDFILE
+#if HAVE_SENDFILE_4
     // If sendfile is available (Linux), try to use it, as the whole copy
     // can be performed in the kernel, without lots of unnecessary copying.
     while (CheckInterrupted(ret = fstat_(inFd, &sourceStat)));
@@ -1056,7 +1114,7 @@ extern "C" int32_t SystemNative_CopyFile(intptr_t sourceFd, intptr_t destination
     // sendfile couldn't be used; fall back to a manual copy below. This could happen
     // if we're on an old kernel, for example, where sendfile could only be used
     // with sockets and not regular files.
-#endif // HAVE_SENDFILE
+#endif // HAVE_SENDFILE_4
 
     // Manually read all data from the source and write it to the destination.
     if (!copied && CopyFile_ReadWrite(inFd, outFd) != 0)
@@ -1066,15 +1124,28 @@ extern "C" int32_t SystemNative_CopyFile(intptr_t sourceFd, intptr_t destination
 
     // Now that the data from the file has been copied, copy over metadata
     // from the source file.  First copy the file times.
+    // If futimes nor futimes are available on this platform, file times will
+    // not be copied over.
     while (CheckInterrupted(ret = fstat_(inFd, &sourceStat)));
     if (ret == 0)
     {
+#if HAVE_FUTIMES
         struct timeval origTimes[2];
         origTimes[0].tv_sec = sourceStat.st_atime;
         origTimes[0].tv_usec = 0;
         origTimes[1].tv_sec = sourceStat.st_mtime;
         origTimes[1].tv_usec = 0;
         while (CheckInterrupted(ret = futimes(outFd, origTimes)));
+#elif HAVE_FUTIMENS
+        // futimes is not a POSIX function, and not available on Android,
+        // but futimens is
+        struct timespec origTimes[2];
+        origTimes[0].tv_sec = sourceStat.st_atime;
+        origTimes[0].tv_nsec = 0;
+        origTimes[1].tv_sec = sourceStat.st_mtime;
+        origTimes[1].tv_nsec = 0;
+        while (CheckInterrupted(ret = futimens(outFd, origTimes)));
+#endif
     }
     if (ret != 0)
     {
@@ -1122,9 +1193,38 @@ extern "C" int32_t SystemNative_INotifyRemoveWatch(intptr_t fd, int32_t wd)
     assert(wd >= 0);
 
 #if HAVE_INOTIFY
-    return inotify_rm_watch(ToFileDescriptor(fd), wd);
+    return inotify_rm_watch(
+        ToFileDescriptor(fd),
+#if INOTIFY_RM_WATCH_WD_UNSIGNED
+        static_cast<uint32_t>(wd));
+#else
+        wd);
+#endif
 #else
     (void)fd, (void)wd;
+    errno = ENOTSUP;
+    return -1;
+#endif
+}
+
+extern "C" int32_t SystemNative_GetPeerID(intptr_t socket, uid_t* euid)
+{
+    int fd = ToFileDescriptor(socket);
+#ifdef SO_PEERCRED
+    struct ucred creds;
+    socklen_t len = sizeof(creds);
+    if (getsockopt(fd, SOL_SOCKET, SO_PEERCRED, &creds, &len) == 0)
+    {
+        *euid = creds.uid;
+        return 0;
+    }
+    return -1;
+#elif HAVE_GETPEEREID
+    uid_t egid;
+    return getpeereid(fd, euid, &egid);
+#else
+    (void)fd;
+    (void)*euid;
     errno = ENOTSUP;
     return -1;
 #endif
@@ -1134,4 +1234,23 @@ extern "C" char* SystemNative_RealPath(const char* path)
 {
     assert(path != nullptr);
     return realpath(path, nullptr);
+}
+
+extern "C" int32_t SystemNative_LockFileRegion(intptr_t fd, int64_t offset, int64_t length, int16_t lockType)
+{
+    if (offset < 0 || length < 0) 
+    {
+        errno = EINVAL;
+        return -1;
+    }
+    
+    struct flock lockArgs;
+    lockArgs.l_type = lockType;
+    lockArgs.l_whence = SEEK_SET;
+    lockArgs.l_start = offset;
+    lockArgs.l_len = length;
+    
+    int32_t ret;
+    while (CheckInterrupted(ret = fcntl (ToFileDescriptor(fd), F_SETLK, &lockArgs)));
+    return ret;
 }

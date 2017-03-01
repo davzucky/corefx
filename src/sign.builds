@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<Project ToolsVersion="12.0" DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+<Project ToolsVersion="14.0" DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
 
   <Import Project="dir.props" />
   <Import Project="..\dir.targets" />
@@ -10,8 +10,19 @@
 
   <UsingTask AssemblyFile="$(BuildToolsTaskDir)Microsoft.DotNet.Build.Tasks.dll" TaskName="ReadSigningRequired" />
 
+  <ItemGroup>
+    <WindowsNativeLocation Include="$(NativeBinDir)\clrcompression.dll" />
+    <WindowsNativeLocation Include="$(NativeBinDir)_aot\clrcompression.dll" />
+  </ItemGroup>
+  
+  <Target Name="GenerateSignForWindowsNative">
+    <WriteSigningRequired AuthenticodeSig="$(AuthenticodeSig)"
+                          MarkerFile="%(WindowsNativeLocation.Identity).requires_signing" />
+  </Target>
+
   <!-- populates item group FilesToSign with the list of files to sign -->
-  <Target Name="GetFilesToSignItems">
+  <Target Name="GetFilesToSignItems"
+          DependsOnTargets="GenerateSignForWindowsNative">
     <!-- read all of the marker files and populate the FilesToSign item group -->
     <ItemGroup>
       <SignMarkerFile Include="$(OutDir)**\*.requires_signing" />

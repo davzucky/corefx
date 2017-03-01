@@ -4,7 +4,7 @@
 
 using System.Collections.Generic;
 using System.Diagnostics;
-using System.Diagnostics.Contracts;
+using System.IO;
 using System.Text;
 
 namespace System.Net.Http.Headers
@@ -53,7 +53,7 @@ namespace System.Net.Http.Headers
 
         protected NameValueHeaderValue(NameValueHeaderValue source)
         {
-            Contract.Requires(source != null);
+            Debug.Assert(source != null);
 
             _name = source._name;
             _value = source._value;
@@ -144,6 +144,27 @@ namespace System.Net.Http.Headers
             return _name;
         }
 
+        private void AddToStringBuilder(StringBuilder sb)
+        {
+            if (GetType() != typeof(NameValueHeaderValue))
+            {
+                // If this is a derived instance, we need to give its
+                // ToString a chance.
+                sb.Append(ToString());
+            }
+            else
+            {
+                // Otherwise, we can use the base behavior and avoid
+                // the string concatenation.
+                sb.Append(_name);
+                if (!string.IsNullOrEmpty(_value))
+                {
+                    sb.Append('=');
+                    sb.Append(_value);
+                }
+            }
+        }
+
         internal static void ToString(ObjectCollection<NameValueHeaderValue> values, char separator, bool leadingSeparator,
             StringBuilder destination)
         {
@@ -161,22 +182,8 @@ namespace System.Net.Http.Headers
                     destination.Append(separator);
                     destination.Append(' ');
                 }
-                destination.Append(value.ToString());
+                value.AddToStringBuilder(destination);
             }
-        }
-
-        internal static string ToString(ObjectCollection<NameValueHeaderValue> values, char separator, bool leadingSeparator)
-        {
-            if ((values == null) || (values.Count == 0))
-            {
-                return null;
-            }
-
-            StringBuilder sb = new StringBuilder();
-
-            ToString(values, separator, leadingSeparator, sb);
-
-            return sb.ToString();
         }
 
         internal static int GetHashCode(ObjectCollection<NameValueHeaderValue> values)
@@ -202,9 +209,9 @@ namespace System.Net.Http.Headers
         internal static int GetNameValueLength(string input, int startIndex,
             Func<NameValueHeaderValue> nameValueCreator, out NameValueHeaderValue parsedValue)
         {
-            Contract.Requires(input != null);
-            Contract.Requires(startIndex >= 0);
-            Contract.Requires(nameValueCreator != null);
+            Debug.Assert(input != null);
+            Debug.Assert(startIndex >= 0);
+            Debug.Assert(nameValueCreator != null);
 
             parsedValue = null;
 
@@ -261,8 +268,8 @@ namespace System.Net.Http.Headers
         internal static int GetNameValueListLength(string input, int startIndex, char delimiter,
             ObjectCollection<NameValueHeaderValue> nameValueCollection)
         {
-            Contract.Requires(nameValueCollection != null);
-            Contract.Requires(startIndex >= 0);
+            Debug.Assert(nameValueCollection != null);
+            Debug.Assert(startIndex >= 0);
 
             if ((string.IsNullOrEmpty(input)) || (startIndex >= input.Length))
             {
@@ -299,7 +306,7 @@ namespace System.Net.Http.Headers
 
         internal static NameValueHeaderValue Find(ObjectCollection<NameValueHeaderValue> values, string name)
         {
-            Contract.Requires((name != null) && (name.Length > 0));
+            Debug.Assert((name != null) && (name.Length > 0));
 
             if ((values == null) || (values.Count == 0))
             {
@@ -318,7 +325,7 @@ namespace System.Net.Http.Headers
 
         internal static int GetValueLength(string input, int startIndex)
         {
-            Contract.Requires(input != null);
+            Debug.Assert(input != null);
 
             if (startIndex >= input.Length)
             {
@@ -341,7 +348,7 @@ namespace System.Net.Http.Headers
 
         private static void CheckNameValueFormat(string name, string value)
         {
-            HeaderUtilities.CheckValidToken(name, "name");
+            HeaderUtilities.CheckValidToken(name, nameof(name));
             CheckValueFormat(value);
         }
 

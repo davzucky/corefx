@@ -94,7 +94,7 @@ namespace System.Security.Cryptography.DeriveBytesTests
                 // Right now we know that at least one of the constructor and get_Salt made a copy, if it was
                 // only get_Salt then this next part would fail.
 
-                saltIn[0] = (byte)~saltIn[0];
+                saltIn[0] = unchecked((byte)~saltIn[0]);
 
                 // Have to read the property again to prove it's detached.
                 Assert.NotEqual(saltIn, deriveBytes.Salt);
@@ -269,6 +269,14 @@ namespace System.Security.Cryptography.DeriveBytesTests
                     0x97, 0x50, 0x72, 0xFF, 0x56, 0x57, 0xAC, 0x7F,
                     0x9B, 0xD2, 0x14, 0x9D, 0xE9, 0x95, 0xA2, 0x6D,
                 });
+        }
+
+        public static void CryptDeriveKey_NotSupported()
+        {
+            using (var deriveBytes = new Rfc2898DeriveBytes(TestPassword, s_testSalt))
+            {
+                Assert.Throws<PlatformNotSupportedException>(() => deriveBytes.CryptDeriveKey("RC2", "SHA1", 128, new byte[8]));
+            }
         }
 
         private static void TestKnownValue(string password, byte[] salt, int iterationCount, byte[] expected)

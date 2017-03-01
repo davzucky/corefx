@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for more information.
 
-using System;
 using Xunit;
 
 namespace System.Linq.Expressions.Tests
@@ -101,6 +100,13 @@ namespace System.Linq.Expressions.Tests
             }
         }
 
+        [Fact]
+        public static void ToStringTest()
+        {
+            UnaryExpression e = Expression.Negate(Expression.Parameter(typeof(int), "x"));
+            Assert.Equal("-x", e.ToString());
+        }
+
         #endregion
 
         #region Test verifiers
@@ -152,7 +158,7 @@ namespace System.Linq.Expressions.Tests
                     Expression.Negate(Expression.Constant(value, typeof(int))),
                     Enumerable.Empty<ParameterExpression>());
             Func<int> f = e.Compile(useInterpreter);
-            Assert.Equal((int)(-value), f());
+            Assert.Equal(unchecked((int)(-value)), f());
         }
 
         private static void VerifyArithmeticNegateLong(long value, bool useInterpreter)
@@ -162,7 +168,7 @@ namespace System.Linq.Expressions.Tests
                     Expression.Negate(Expression.Constant(value, typeof(long))),
                     Enumerable.Empty<ParameterExpression>());
             Func<long> f = e.Compile(useInterpreter);
-            Assert.Equal((long)(-value), f());
+            Assert.Equal(unchecked((long)(-value)), f());
         }
 
         private static void VerifyArithmeticNegateSByte(sbyte value)
@@ -177,7 +183,7 @@ namespace System.Linq.Expressions.Tests
                     Expression.Negate(Expression.Constant(value, typeof(short))),
                     Enumerable.Empty<ParameterExpression>());
             Func<short> f = e.Compile(useInterpreter);
-            Assert.Equal((short)(-value), f());
+            Assert.Equal(unchecked((short)(-value)), f());
         }
 
         #endregion

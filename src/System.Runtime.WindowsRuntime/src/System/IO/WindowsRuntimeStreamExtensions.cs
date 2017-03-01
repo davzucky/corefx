@@ -2,6 +2,8 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for more information.
 
+extern alias System_Runtime_Extensions;
+
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Diagnostics.Contracts;
@@ -10,6 +12,7 @@ using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using Windows.Foundation;
 using Windows.Storage.Streams;
+using BufferedStream = System_Runtime_Extensions::System.IO.BufferedStream;
 
 namespace System.IO
 {
@@ -63,8 +66,8 @@ namespace System.IO
 
         private static void EnsureAdapterBufferSize(Stream adapter, Int32 requiredBufferSize, String methodName)
         {
-            Contract.Requires(adapter != null);
-            Contract.Requires(!String.IsNullOrWhiteSpace(methodName));
+            Debug.Assert(adapter != null);
+            Debug.Assert(!String.IsNullOrWhiteSpace(methodName));
 
             Int32 currentBufferSize = 0;
             BufferedStream bufferedAdapter = adapter as BufferedStream;
@@ -135,7 +138,7 @@ namespace System.IO
             if (bufferSize < 0)
                 throw new ArgumentOutOfRangeException(nameof(bufferSize), SR.ArgumentOutOfRange_WinRtAdapterBufferSizeMayNotBeNegative);
 
-            Contract.Requires(!String.IsNullOrWhiteSpace(invokedMethodName));
+            Debug.Assert(!String.IsNullOrWhiteSpace(invokedMethodName));
             Contract.Ensures(Contract.Result<Stream>() != null);
             Contract.EndContractBlock();
 
@@ -200,9 +203,9 @@ namespace System.IO
 
         private static Stream AsStreamInternalFactoryHelper(Object windowsRuntimeStream, Int32 bufferSize, String invokedMethodName, bool forceBufferSize)
         {
-            Contract.Requires(windowsRuntimeStream != null);
-            Contract.Requires(bufferSize >= 0);
-            Contract.Requires(!String.IsNullOrWhiteSpace(invokedMethodName));
+            Debug.Assert(windowsRuntimeStream != null);
+            Debug.Assert(bufferSize >= 0);
+            Debug.Assert(!String.IsNullOrWhiteSpace(invokedMethodName));
 
             Contract.Ensures(Contract.Result<Stream>() != null);
             Contract.EndContractBlock();
@@ -345,7 +348,7 @@ namespace System.IO
 
         private static NetFxToWinRtStreamAdapter AsWindowsRuntimeStreamInternalFactoryHelper(Stream stream)
         {
-            Contract.Requires(stream != null);
+            Debug.Assert(stream != null);
             Contract.Ensures(Contract.Result<NetFxToWinRtStreamAdapter>() != null);
             Contract.EndContractBlock();
 

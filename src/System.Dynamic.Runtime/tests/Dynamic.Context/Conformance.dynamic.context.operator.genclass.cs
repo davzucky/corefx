@@ -697,7 +697,7 @@ namespace ManagedTests.DynamicCSharp.Conformance.dynamic.context.operate.genclas
         }
     }
 
-    static public class Extension
+    public static class Extension
     {
         public static int ExReturnTest(this int p)
         {
@@ -1250,7 +1250,7 @@ namespace ManagedTests.DynamicCSharp.Conformance.dynamic.context.operate.genclas
         }
     }
 
-    static public class Extension
+    public static class Extension
     {
         public static int Method(this string s)
         {
@@ -1436,7 +1436,7 @@ namespace ManagedTests.DynamicCSharp.Conformance.dynamic.context.operate.genclas
 
     public class Test
     {
-        [Fact]
+        [ConditionalFact(nameof(PlatformDetection) + "." + nameof(PlatformDetection.IsNotWindowsSubsystemForLinux))] // https://github.com/Microsoft/BashOnWindows/issues/513
         public static void DynamicCSharpRunTest()
         {
             Assert.Equal(0, MainMethod());

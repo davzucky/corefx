@@ -2,8 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for more information.
 
-using System;
-using System.Reflection;
 using Xunit;
 
 namespace System.Linq.Expressions.Tests
@@ -19,6 +17,13 @@ namespace System.Linq.Expressions.Tests
             VerifyUnbox(42, typeof(int?), false, useInterpreter);
             VerifyUnbox(null, typeof(int?), false, useInterpreter);
             VerifyUnbox(null, typeof(int), true, useInterpreter);
+        }
+
+        [Fact]
+        public static void ToStringTest()
+        {
+            UnaryExpression e = Expression.Unbox(Expression.Parameter(typeof(object), "x"), typeof(int));
+            Assert.Equal("Unbox(x)", e.ToString());
         }
 
         #endregion

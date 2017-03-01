@@ -2,9 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for more information.
 
-using System;
 using System.Collections.Generic;
-using System.Reflection;
 using Xunit;
 
 namespace System.Linq.Expressions.Tests
@@ -64,30 +62,30 @@ namespace System.Linq.Expressions.Tests
         [Fact]
         public void NoArguments()
         {
-            Assert.Throws<ArgumentException>(null, () => Expression.ElementInit(typeof(List<int>).GetMethod("Add")));
-            Assert.Throws<ArgumentException>(null, () => Expression.ElementInit(typeof(List<int>).GetMethod("Add"), Enumerable.Empty<Expression>()));
+            Assert.Throws<ArgumentException>("method", () => Expression.ElementInit(typeof(List<int>).GetMethod("Add")));
+            Assert.Throws<ArgumentException>("method", () => Expression.ElementInit(typeof(List<int>).GetMethod("Add"), Enumerable.Empty<Expression>()));
         }
 
         [Fact]
         public void ArgumentCountWrong()
         {
-            Assert.Throws<ArgumentException>(null, () => Expression.ElementInit(typeof(List<int>).GetMethod("Add"), Expression.Constant(0), Expression.Constant(1)));
-            Assert.Throws<ArgumentException>(null, () => Expression.ElementInit(typeof(List<int>).GetMethod("Add"), Enumerable.Repeat(Expression.Constant(0), 2)));
+            Assert.Throws<ArgumentException>("method", () => Expression.ElementInit(typeof(List<int>).GetMethod("Add"), Expression.Constant(0), Expression.Constant(1)));
+            Assert.Throws<ArgumentException>("method", () => Expression.ElementInit(typeof(List<int>).GetMethod("Add"), Enumerable.Repeat(Expression.Constant(0), 2)));
         }
 
         [Fact]
         public void ArgumentTypeMisMatch()
         {
-            Assert.Throws<ArgumentException>(null, () => Expression.ElementInit(typeof(List<int>).GetMethod("Add"), Expression.Constant("Hello")));
-            Assert.Throws<ArgumentException>(null, () => Expression.ElementInit(typeof(List<int>).GetMethod("Add"), Enumerable.Repeat(Expression.Constant("Hello"), 1)));
+            Assert.Throws<ArgumentException>("arguments[0]", () => Expression.ElementInit(typeof(List<int>).GetMethod("Add"), Expression.Constant("Hello")));
+            Assert.Throws<ArgumentException>("arguments[0]", () => Expression.ElementInit(typeof(List<int>).GetMethod("Add"), Enumerable.Repeat(Expression.Constant("Hello"), 1)));
         }
 
         [Fact]
         public void UnreadableArgument()
         {
             Expression argument = Expression.Property(null, typeof(Unreadable<int>), "WriteOnly");
-            Assert.Throws<ArgumentException>("arguments", () => Expression.ElementInit(typeof(List<int>).GetMethod("Add"), argument));
-            Assert.Throws<ArgumentException>("arguments", () => Expression.ElementInit(typeof(List<int>).GetMethod("Add"), Enumerable.Repeat(argument, 1)));
+            Assert.Throws<ArgumentException>("arguments[0]", () => Expression.ElementInit(typeof(List<int>).GetMethod("Add"), argument));
+            Assert.Throws<ArgumentException>("arguments[0]", () => Expression.ElementInit(typeof(List<int>).GetMethod("Add"), Enumerable.Repeat(argument, 1)));
         }
 
         [Fact]

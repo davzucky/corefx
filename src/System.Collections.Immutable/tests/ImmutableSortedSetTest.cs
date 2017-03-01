@@ -4,7 +4,6 @@
 
 using System.Collections.Generic;
 using System.Diagnostics;
-using System.Diagnostics.Contracts;
 using System.Linq;
 using Xunit;
 
@@ -33,7 +32,7 @@ namespace System.Collections.Immutable.Tests
             var expected = new SortedSet<int>();
             var actual = ImmutableSortedSet<int>.Empty;
 
-            int seed = (int)DateTime.Now.Ticks;
+            int seed = unchecked((int)DateTime.Now.Ticks);
             Debug.WriteLine("Using random seed {0}", seed);
             var random = new Random(seed);
 
@@ -410,7 +409,7 @@ namespace System.Collections.Immutable.Tests
         /// <param name="comparer">The comparer used to obtain the empty set, if any.</param>
         private void EmptyTestHelper<T>(IImmutableSet<T> emptySet, T value, IComparer<T> comparer)
         {
-            Contract.Requires(emptySet != null);
+            Assert.NotNull(emptySet);
 
             this.EmptyTestHelper(emptySet);
             Assert.Same(emptySet, emptySet.ToImmutableSortedSet(comparer));

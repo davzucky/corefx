@@ -4,7 +4,6 @@
 
 using System.Collections.Generic;
 using System.Diagnostics;
-using System.Linq;
 using System.Runtime.InteropServices;
 using Microsoft.CSharp.RuntimeBinder.Syntax;
 
@@ -23,7 +22,7 @@ namespace Microsoft.CSharp.RuntimeBinder.Semantics
     // variables.
     // ----------------------------------------------------------------------------
 
-    internal class MethodOrPropertySymbol : ParentSymbol
+    internal abstract class MethodOrPropertySymbol : ParentSymbol
     {
         public uint modOptCount;              // number of CMOD_OPTs in signature and return type
 
@@ -143,7 +142,7 @@ namespace Microsoft.CSharp.RuntimeBinder.Semantics
             return _defaultParameterConstValTypes[index];
         }
 
-        public bool IsMarshalAsParameter(int index)
+        private bool IsMarshalAsParameter(int index)
         {
             return _marshalAsIndex[index];
         }
@@ -154,7 +153,7 @@ namespace Microsoft.CSharp.RuntimeBinder.Semantics
             _marshalAsBuffer[index] = umt;
         }
 
-        public UnmanagedType GetMarshalAsParameterValue(int index)
+        private UnmanagedType GetMarshalAsParameterValue(int index)
         {
             Debug.Assert(IsMarshalAsParameter(index));
             return _marshalAsBuffer[index];

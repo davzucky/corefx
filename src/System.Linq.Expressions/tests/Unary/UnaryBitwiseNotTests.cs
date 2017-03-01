@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for more information.
 
-using System;
 using Xunit;
 
 namespace System.Linq.Expressions.Tests
@@ -101,6 +100,13 @@ namespace System.Linq.Expressions.Tests
             }
         }
 
+        [Fact]
+        public static void ToStringTest()
+        {
+            UnaryExpression e = Expression.Not(Expression.Parameter(typeof(bool), "x"));
+            Assert.Equal("Not(x)", e.ToString());
+        }
+
         #endregion
 
         #region Test verifiers
@@ -122,7 +128,7 @@ namespace System.Linq.Expressions.Tests
                     Expression.Not(Expression.Constant(value, typeof(byte))),
                     Enumerable.Empty<ParameterExpression>());
             Func<byte> f = e.Compile(useInterpreter);
-            Assert.Equal((byte)(~value), f());
+            Assert.Equal(unchecked((byte)(~value)), f());
         }
 
         private static void VerifyBitwiseNotInt(int value, bool useInterpreter)
@@ -192,7 +198,7 @@ namespace System.Linq.Expressions.Tests
                     Expression.Not(Expression.Constant(value, typeof(ushort))),
                     Enumerable.Empty<ParameterExpression>());
             Func<ushort> f = e.Compile(useInterpreter);
-            Assert.Equal((ushort)(~value), f());
+            Assert.Equal(unchecked((ushort)(~value)), f());
         }
 
         #endregion

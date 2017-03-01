@@ -2,21 +2,19 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for more information.
 
-using System.Collections.Generic;
 using System.Diagnostics;
-using Microsoft.CSharp.RuntimeBinder;
 using Microsoft.CSharp.RuntimeBinder.Errors;
 using Microsoft.CSharp.RuntimeBinder.Syntax;
 
 namespace Microsoft.CSharp.RuntimeBinder.Semantics
 {
-    internal class SymbolLoader
+    internal sealed class SymbolLoader
     {
-        private NameManager _nameManager;
+        private readonly NameManager _nameManager;
 
-        public PredefinedMembers PredefinedMembers { get; private set; }
-        public GlobalSymbolContext GlobalSymbolContext { get; private set; }
-        public ErrorHandling ErrorContext { get; private set; }
+        public PredefinedMembers PredefinedMembers { get; }
+        private GlobalSymbolContext GlobalSymbolContext { get; }
+        public ErrorHandling ErrorContext { get; }
         public SymbolTable RuntimeBinderSymbolTable { get; private set; }
 
         public SymbolLoader(
@@ -45,9 +43,9 @@ namespace Microsoft.CSharp.RuntimeBinder.Semantics
         public MethodSymbol LookupInvokeMeth(AggregateSymbol pAggDel)
         {
             Debug.Assert(pAggDel.AggKind() == AggKindEnum.Delegate);
-            for (Symbol pSym = this.LookupAggMember(GetNameManager().GetPredefName(PredefinedName.PN_INVOKE), pAggDel, symbmask_t.MASK_ALL);
+            for (Symbol pSym = LookupAggMember(GetNameManager().GetPredefName(PredefinedName.PN_INVOKE), pAggDel, symbmask_t.MASK_ALL);
                  pSym != null;
-                 pSym = this.LookupNextSym(pSym, pAggDel, symbmask_t.MASK_ALL))
+                 pSym = LookupNextSym(pSym, pAggDel, symbmask_t.MASK_ALL))
             {
                 if (pSym.IsMethodSymbol() && pSym.AsMethodSymbol().isInvoke())
                 {
@@ -69,32 +67,32 @@ namespace Microsoft.CSharp.RuntimeBinder.Semantics
 
         public TypeManager GetTypeManager()
         {
-            return this.TypeManager;
+            return TypeManager;
         }
 
         public TypeManager TypeManager
         {
-            get { return this.GlobalSymbolContext.TypeManager; }
+            get { return GlobalSymbolContext.TypeManager; }
         }
 
         public PredefinedMembers getPredefinedMembers()
         {
-            return this.PredefinedMembers;
+            return PredefinedMembers;
         }
 
         public BSYMMGR getBSymmgr()
         {
-            return this.GlobalSymbolContext.GetGlobalSymbols();
+            return GlobalSymbolContext.GetGlobalSymbols();
         }
 
         public SymFactory GetGlobalSymbolFactory()
         {
-            return this.GlobalSymbolContext.GetGlobalSymbolFactory();
+            return GlobalSymbolContext.GetGlobalSymbolFactory();
         }
 
         public MiscSymFactory GetGlobalMiscSymFactory()
         {
-            return this.GlobalSymbolContext.GetGlobalMiscSymFactory();
+            return GlobalSymbolContext.GetGlobalMiscSymFactory();
         }
 
         public AggregateType GetReqPredefType(PredefinedType pt)
@@ -119,7 +117,7 @@ namespace Microsoft.CSharp.RuntimeBinder.Semantics
             return GetOptPredefAgg(pt, true);
         }
 
-        public AggregateSymbol GetOptPredefAgg(PredefinedType pt, bool fEnsureState)
+        private AggregateSymbol GetOptPredefAgg(PredefinedType pt, bool fEnsureState)
         {
             AggregateSymbol agg = GetTypeManager().GetOptPredefAgg(pt);
             return agg;
@@ -191,7 +189,7 @@ namespace Microsoft.CSharp.RuntimeBinder.Semantics
             return null;
         }
 
-        public bool IsBaseInterface(CType pDerived, CType pBase)
+        private bool IsBaseInterface(CType pDerived, CType pBase)
         {
             Debug.Assert(pDerived != null);
             Debug.Assert(pBase != null);
@@ -233,7 +231,7 @@ namespace Microsoft.CSharp.RuntimeBinder.Semantics
             return IsBaseClass(pDerived, pBase);
         }
 
-        public bool IsBaseClass(CType pDerived, CType pBase)
+        private bool IsBaseClass(CType pDerived, CType pBase)
         {
             Debug.Assert(pDerived != null);
             Debug.Assert(pBase != null);
@@ -294,7 +292,7 @@ namespace Microsoft.CSharp.RuntimeBinder.Semantics
             return HasImplicitReferenceConversion(pSource, pDest);
         }
 
-        protected bool AreTypesEqualForConversion(CType pType1, CType pType2)
+        private bool AreTypesEqualForConversion(CType pType1, CType pType2)
         {
             return pType1.Equals(pType2);
         }
@@ -346,7 +344,7 @@ namespace Microsoft.CSharp.RuntimeBinder.Semantics
             return HasIdentityOrImplicitReferenceConversion(pSourceElement, pDestTypeArgument);
         }
 
-        public bool HasImplicitReferenceConversion(CType pSource, CType pDest)
+        private bool HasImplicitReferenceConversion(CType pSource, CType pDest)
         {
             Debug.Assert(pSource != null);
             Debug.Assert(pDest != null);

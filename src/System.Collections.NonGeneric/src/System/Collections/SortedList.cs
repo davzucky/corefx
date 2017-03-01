@@ -63,7 +63,8 @@ namespace System.Collections
 #if FEATURE_CORECLR
     [Obsolete("Non-generic collections have been deprecated. Please use collections in System.Collections.Generic.")]
 #endif
-    public class SortedList : IDictionary
+    [Serializable]
+    public class SortedList : IDictionary, ICloneable
     {
         private Object[] _keys;
         private Object[] _values;
@@ -72,9 +73,13 @@ namespace System.Collections
         private IComparer _comparer;
         private KeyList _keyList;
         private ValueList _valueList;
+        [NonSerialized]
         private Object _syncRoot;
 
         private const int _defaultCapacity = 16;
+
+        // Copy of Array.MaxArrayLength
+        internal const int MaxArrayLength = 0X7FEFFFFF;
 
         // Constructs a new sorted list. The sorted list is initially empty and has
         // a capacity of zero. Upon adding the first element to the sorted list the
@@ -146,7 +151,7 @@ namespace System.Collections
         // Constructs a new sorted list containing a copy of the entries in the
         // given dictionary. The elements of the sorted list are ordered according
         // to the IComparable interface, which must be implemented by the
-        // keys of all entries in the the given dictionary as well as keys
+        // keys of all entries in the given dictionary as well as keys
         // subsequently added to the sorted list.
         // 
         public SortedList(IDictionary d)
@@ -159,7 +164,7 @@ namespace System.Collections
         // to the given IComparer implementation. If comparer is
         // null, the elements are compared to each other using the
         // IComparable interface, which in that case must be implemented
-        // by the keys of all entries in the the given dictionary as well as keys
+        // by the keys of all entries in the given dictionary as well as keys
         // subsequently added to the sorted list.
         // 
         public SortedList(IDictionary d, IComparer comparer)
@@ -397,7 +402,7 @@ namespace System.Collections
             int newCapacity = _keys.Length == 0 ? 16 : _keys.Length * 2;
             // Allow the list to grow to maximum possible capacity (~2G elements) before encountering overflow.
             // Note that this check works even when _items.Length overflowed thanks to the (uint) cast
-            if ((uint)newCapacity > ArrayList.MaxArrayLength) newCapacity = ArrayList.MaxArrayLength;
+            if ((uint)newCapacity > MaxArrayLength) newCapacity = MaxArrayLength;
             if (newCapacity < min) newCapacity = min;
             Capacity = newCapacity;
         }
@@ -608,6 +613,7 @@ namespace System.Collections
             Capacity = _size;
         }
 
+        [Serializable]
         private class SyncSortedList : SortedList
         {
             private SortedList _list;
@@ -828,8 +834,8 @@ namespace System.Collections
             }
         }
 
-
-        private class SortedListEnumerator : IDictionaryEnumerator
+        [Serializable]
+        private class SortedListEnumerator : IDictionaryEnumerator, ICloneable
         {
             private SortedList _sortedList;
             private Object _key;
@@ -856,6 +862,8 @@ namespace System.Collections
                 _getObjectRetType = getObjRetType;
                 _current = false;
             }
+
+            public object Clone() => MemberwiseClone();
 
             public virtual Object Key
             {
@@ -929,6 +937,7 @@ namespace System.Collections
             }
         }
 
+        [Serializable]
         private class KeyList : IList
         {
             private SortedList _sortedList;
@@ -1034,6 +1043,7 @@ namespace System.Collections
             }
         }
 
+        [Serializable]
         private class ValueList : IList
         {
             private SortedList _sortedList;

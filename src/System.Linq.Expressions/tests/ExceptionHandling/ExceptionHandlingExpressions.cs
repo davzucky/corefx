@@ -3,6 +3,9 @@
 // See the LICENSE file in the project root for more information.
 
 using System.Collections.Generic;
+using System.Reflection;
+using System.Reflection.Emit;
+using System.Runtime.CompilerServices;
 using System.Text;
 using Xunit;
 
@@ -32,6 +35,15 @@ namespace System.Linq.Expressions.Tests
             }
         }
 
+        private static RuntimeWrappedException CreateRuntimeWrappedException(object inner)
+        {
+            return
+                (RuntimeWrappedException)
+                    typeof(RuntimeWrappedException).GetConstructors(BindingFlags.Instance | BindingFlags.NonPublic)
+                        .First(c => c.GetParameters().Length == 1)
+                        .Invoke(new[] {inner});
+        }
+
         [Theory]
         [ClassData(typeof(CompilationTypes))]
         public void ThrowNullSameAsRethrow(bool useInterpreter)
@@ -48,6 +60,58 @@ namespace System.Linq.Expressions.Tests
                 );
             Action doRethrowTwice = Expression.Lambda<Action>(rethrowTwice).Compile(useInterpreter);
             Assert.Throws<TestException>(doRethrowTwice);
+        }
+
+        [Fact]
+        public void DefaultThrowTypeIsVoid()
+        {
+            Assert.Equal(typeof(void), Expression.Throw(null).Type);
+            Assert.Equal(typeof(void), Expression.Throw(Expression.Constant(new TestException())).Type);
+            Assert.Equal(typeof(void), Expression.Rethrow().Type);
+        }
+
+        [Fact]
+        public void ExceptionMustBeReadable()
+        {
+            Expression value = Expression.Property(null, typeof(Unreadable<Exception>), "WriteOnly");
+            Assert.Throws<ArgumentException>("value", () => Expression.Throw(value));
+        }
+
+        [Fact]
+        public void GenericThrowType()
+        {
+            Type listType = typeof(List<>);
+            Assert.Throws<ArgumentException>(
+                "type", () => Expression.Throw(Expression.Constant(new TestException()), listType));
+            Assert.Throws<ArgumentException>("type", () => Expression.Rethrow(listType));
+        }
+
+        [Fact]
+        public void ThrowTypeWithGenericParamters()
+        {
+            Type listType = typeof(List<>);
+            Type listListListType = listType.MakeGenericType(listType.MakeGenericType(listType));
+            Assert.Throws<ArgumentException>(
+                "type", () => Expression.Throw(Expression.Constant(new TestException()), listListListType));
+            Assert.Throws<ArgumentException>("type", () => Expression.Rethrow(listListListType));
+        }
+
+        [Fact]
+        public void PointerThrowType()
+        {
+            Type pointer = typeof(int).MakeByRefType();
+            Assert.Throws<ArgumentException>(
+                "type", () => Expression.Throw(Expression.Constant(new TestException()), pointer));
+            Assert.Throws<ArgumentException>("type", () => Expression.Rethrow(pointer));
+        }
+
+        [Fact]
+        public void ByRefThrowType()
+        {
+            Type byRefType = typeof(int).MakeByRefType();
+            Assert.Throws<ArgumentException>(
+                "type", () => Expression.Throw(Expression.Constant(new TestException()), byRefType));
+            Assert.Throws<ArgumentException>("type", () => Expression.Rethrow(byRefType));
         }
 
         [Theory]
@@ -95,7 +159,7 @@ namespace System.Linq.Expressions.Tests
             Assert.Throws<InvalidOperationException>(() => rethrowFinally.Compile(useInterpreter));
         }
 
-        [Theory, InlineData(true)]
+        [Theory, ClassData(typeof(CompilationTypes))]
         public void CannotRethrowWithinFaultWithinCatch(bool useInterpreter)
         {
             LambdaExpression rethrowFinally = Expression.Lambda<Action>(
@@ -113,14 +177,7 @@ namespace System.Linq.Expressions.Tests
             Assert.Throws<InvalidOperationException>(() => rethrowFinally.Compile(useInterpreter));
         }
 
-        [Fact, ActiveIssue(3838)]
-        public void CannotRethrowWithinFaultWithinCatchCompiled()
-        {
-            CannotRethrowWithinFaultWithinCatch(false);
-        }
-
-        [Theory]
-        [InlineData(false)]
+        [Theory, ClassData(typeof(CompilationTypes))]
         public void CanCatchAndThrowNonExceptions(bool useInterpreter)
         {
             TryExpression throwCatchString = Expression.TryCatch(
@@ -130,11 +187,93 @@ namespace System.Linq.Expressions.Tests
             Expression.Lambda<Action>(throwCatchString).Compile(useInterpreter)();
         }
 
-        [Fact]
-        [ActiveIssue(5898)]
-        public void CanCatchAndThrowNonExceptionsInterpreted()
+        [Theory, ClassData(typeof(CompilationTypes))]
+        public void CanCatchAndUseNonExceptions(bool useInterpreter)
         {
-            CanCatchAndThrowNonExceptions(true);
+            ParameterExpression ex = Expression.Variable(typeof(string));
+            TryExpression throwCatchString = Expression.TryCatch(
+                Expression.Throw(Expression.Constant("Hello"), typeof(int)),
+                Expression.Catch(ex, Expression.Property(ex, "Length"))
+                );
+            Func<int> func = Expression.Lambda<Func<int>>(throwCatchString).Compile(useInterpreter);
+            Assert.Equal(5, func());
+        }
+
+        [Theory, ClassData(typeof(CompilationTypes))]
+        public void DontCatchInternallWrappedExceptions(bool useInterpreter)
+        {
+            TryExpression throwCatch = Expression.TryCatch(
+                Expression.Throw(Expression.Constant("Boo!")),
+                Expression.Catch(typeof(RuntimeWrappedException), Expression.Empty()));
+            Action throwRWE = Expression.Lambda<Action>(throwCatch).Compile(useInterpreter);
+            RuntimeWrappedException rwe = Assert.Throws<RuntimeWrappedException>(throwRWE);
+            Assert.Equal("Boo!", rwe.WrappedException);
+        }
+
+        [Theory, ClassData(typeof(CompilationTypes))]
+        public void ThrownNonExceptionPassesThroughNonMatchingHandlers(bool useInterpreter)
+        {
+            ParameterExpression ex = Expression.Variable(typeof(object));
+            TryExpression nested = Expression.TryCatch(
+                Expression.TryCatch(
+                    Expression.Throw(Expression.Constant("1234567890"), typeof(int)),
+                    Expression.Catch(typeof(RuntimeWrappedException), Expression.Constant(1)),
+                    Expression.Catch(typeof(Exception), Expression.Constant(2))
+                    ),
+                Expression.Catch(ex, Expression.Property(Expression.Convert(ex, typeof(string)), "Length"))
+                );
+            Func<int> func = Expression.Lambda<Func<int>>(nested).Compile(useInterpreter);
+            Assert.Equal(10, func());
+        }
+
+        [Theory, ClassData(typeof(CompilationTypes))]
+        public void ExpressionsUnwrapeExternallyThrownRuntimeWrappedException(bool useInterpreter)
+        {
+            ParameterExpression exRWE = Expression.Variable(typeof(RuntimeWrappedException));
+            ParameterExpression exEx = Expression.Variable(typeof(Exception));
+            ParameterExpression exStr = Expression.Variable(typeof(string));
+            RuntimeWrappedException rwe = CreateRuntimeWrappedException("1234");
+            TryExpression tryCatch = Expression.TryCatch(
+                Expression.Throw(Expression.Constant(rwe), typeof(int)),
+                Expression.Catch(exRWE, Expression.Constant(0)),
+                Expression.Catch(exEx, Expression.Constant(1)),
+                Expression.Catch(exStr, Expression.Property(exStr, "Length")),
+                Expression.Catch(typeof(object), Expression.Constant(3)));
+            Func<int> func = Expression.Lambda<Func<int>>(tryCatch).Compile(useInterpreter);
+            Assert.Equal(4, func());
+        }
+
+        [Theory, ClassData(typeof(CompilationTypes))]
+        public void CatchFromExternallyThrownString(bool useInterpreter)
+        {
+            foreach(bool assemblyWraps in new []{false, true})
+            {
+                CustomAttributeBuilder custAtt =
+                    new CustomAttributeBuilder(
+                        typeof(RuntimeCompatibilityAttribute).GetConstructors()[0], Array.Empty<object>(),
+                        new[]{ typeof(RuntimeCompatibilityAttribute).GetProperty(nameof(RuntimeCompatibilityAttribute.WrapNonExceptionThrows)) },
+                        new object[] { assemblyWraps });
+                AssemblyBuilder assembly = AssemblyBuilder.DefineDynamicAssembly(
+                    new AssemblyName("Name"), AssemblyBuilderAccess.Run);
+                assembly.SetCustomAttribute(custAtt);
+                ModuleBuilder module = assembly.DefineDynamicModule("Name");
+                TypeBuilder type = module.DefineType("Type");
+                MethodBuilder throwingMethod = type.DefineMethod(
+                    "WillThrow", MethodAttributes.Public | MethodAttributes.Static, typeof(void), Array.Empty<Type>());
+                ILGenerator ilGen = throwingMethod.GetILGenerator();
+                ilGen.Emit(OpCodes.Ldstr, "An Exceptional Exception!");
+                ilGen.Emit(OpCodes.Throw);
+                ilGen.Emit(OpCodes.Ret);
+                Type createdType = type.CreateTypeInfo().AsType();
+                ParameterExpression ex = Expression.Variable(typeof(string));
+                TryExpression tryCatch =
+                    Expression.TryCatch(
+                        Expression.Block(
+                            Expression.Call(createdType.GetMethod("WillThrow")), Expression.Constant("Nothing Thrown")),
+                        Expression.Catch(ex, ex));
+                Func<string> func = Expression.Lambda<Func<string>>(tryCatch).Compile(useInterpreter);
+                Assert.Equal("An Exceptional Exception!", func());
+            }
         }
 
         [Theory]
@@ -306,19 +445,12 @@ namespace System.Linq.Expressions.Tests
         }
 
         [Theory]
-        [InlineData(false)]
+        [ClassData(typeof(CompilationTypes))]
         public void NonExceptionDerivedExceptionWrapped(bool useInterpreter)
         {
-            Action throwWrapped = Expression.Lambda<Action>(Expression.Throw(Expression.Constant(""))).Compile(useInterpreter);
-            Exception ex = Assert.ThrowsAny<Exception>(throwWrapped);
-            Assert.Equal("System.Runtime.CompilerServices.RuntimeWrappedException", ex.GetType().FullName);
-        }
-
-        [Fact]
-        [ActiveIssue(5898)]
-        public void NonExceptionDerivedExceptionWrappedInterpreted()
-        {
-            NonExceptionDerivedExceptionWrapped(true);
+            Action throwWrapped = Expression.Lambda<Action>(Expression.Throw(Expression.Constant("Hello"))).Compile(useInterpreter);
+            RuntimeWrappedException rwe = Assert.Throws<RuntimeWrappedException>(throwWrapped);
+            Assert.Equal("Hello", rwe.WrappedException);
         }
 
         [Theory]
@@ -395,7 +527,7 @@ namespace System.Linq.Expressions.Tests
             Assert.Equal(1, Expression.Lambda<Func<int>>(block).Compile(useInterpreter)());
         }
 
-        [Theory, InlineData(true)]
+        [Theory, ClassData(typeof(CompilationTypes))]
         public void FaultNotTriggeredOnNoThrowNonVoid(bool useInterpreter)
         {
             Func<int> func = Expression.Lambda<Func<int>>(
@@ -407,13 +539,7 @@ namespace System.Linq.Expressions.Tests
             Assert.Equal(42, func());
         }
 
-        [Fact, ActiveIssue(3838)]
-        public void FaultNotTriggeredOnNoThrowNonVoidCompiled()
-        {
-            FaultNotTriggeredOnNoThrowNonVoid(false);
-        }
-
-        [Theory, InlineData(true)]
+        [Theory, ClassData(typeof(CompilationTypes))]
         public void FaultTriggeredOnThrow(bool useInterpreter)
         {
             ParameterExpression variable = Expression.Parameter(typeof(int));
@@ -434,10 +560,32 @@ namespace System.Linq.Expressions.Tests
             Assert.Equal(2, Expression.Lambda<Func<int>>(block).Compile(useInterpreter)());
         }
 
-        [Fact, ActiveIssue(3838)]
-        public void FaultTriggeredOnThrowCompiled()
+        [Theory, InlineData(true)]
+        public void FinallyAndFaultAfterManyLabels(bool useInterpreter)
         {
-            FaultTriggeredOnThrow(false);
+            // There is a caching optimisation used below a certain number of faults or
+            // finally, so go past that to catch any regressions in the non-optimised
+            // path.
+            ParameterExpression variable = Expression.Parameter(typeof(int));
+            LabelTarget target = Expression.Label(typeof(int));
+            BlockExpression block = Expression.Block(
+                new[] { variable },
+                Expression.Assign(variable, Expression.Constant(1)),
+                Expression.TryCatch(
+                    Expression.Block(
+                        Enumerable.Repeat(Expression.TryFinally(Expression.Empty(), Expression.Empty()), 40).Append(
+                            Expression.TryFault(
+                                Expression.Throw(Expression.Constant(new TestException())),
+                                Expression.Assign(variable, Expression.Constant(2))
+                                )
+                            )
+                        ),
+                    Expression.Catch(typeof(TestException), Expression.Empty())
+                    ),
+                Expression.Return(target, variable),
+                Expression.Label(target, Expression.Default(typeof(int)))
+                );
+            Assert.Equal(2, Expression.Lambda<Func<int>>(block).Compile(useInterpreter)());
         }
 
         [Theory]
@@ -471,7 +619,7 @@ namespace System.Linq.Expressions.Tests
             Assert.Throws<TestException>(act);
         }
 
-        [Theory, InlineData(true)]
+        [Theory, ClassData(typeof(CompilationTypes))]
         public void ExceptionInFaultReplacesException(bool useInterpreter)
         {
             Action act = Expression.Lambda<Action>(
@@ -481,12 +629,6 @@ namespace System.Linq.Expressions.Tests
                     )
                 ).Compile(useInterpreter);
             Assert.Throws<TestException>(act);
-        }
-
-        [Fact, ActiveIssue(3838)]
-        public void ExceptionInFaultReplacesExceptionCompiled()
-        {
-            ExceptionInFaultReplacesException(false);
         }
 
         [Theory]
@@ -650,8 +792,7 @@ namespace System.Linq.Expressions.Tests
             Assert.Throws<ArgumentException>("filter", () => Expression.Catch(Expression.Parameter(typeof(Exception)), Expression.Empty(), Expression.Constant(42)));
         }
 
-        [Theory]
-        [InlineData(true)]
+        [Theory, ClassData(typeof(CompilationTypes))]
         public void FilterOnCatch(bool useInterpreter)
         {
             TryExpression tryExp = Expression.TryCatch(
@@ -663,15 +804,7 @@ namespace System.Linq.Expressions.Tests
             Assert.Equal(2, Expression.Lambda<Func<int>>(tryExp).Compile(useInterpreter)());
         }
 
-        [Fact]
-        [ActiveIssue(3838)]
-        public void FilterOnCatchCompiled(bool useInterpreter)
-        {
-            FilterOnCatch(false);
-        }
-
-        [Theory]
-        [InlineData(true)]
+        [Theory, ClassData(typeof(CompilationTypes))]
         public void FilterCanAccessException(bool useInterpreter)
         {
             ParameterExpression exception = Expression.Variable(typeof(TestException));
@@ -684,15 +817,7 @@ namespace System.Linq.Expressions.Tests
             Assert.Equal(2, Expression.Lambda<Func<int>>(tryExp).Compile(useInterpreter)());
         }
 
-        [Fact]
-        [ActiveIssue(3838)]
-        public void FilterCanAccessExceptionCompiled(bool useInterpreter)
-        {
-            FilterCanAccessException(false);
-        }
-
-        [Theory]
-        [InlineData(true)]
+        [Theory, ClassData(typeof(CompilationTypes))]
         public void FilterOverwiteExceptionVisibleToHandler(bool useInterpreter)
         {
             ParameterExpression exception = Expression.Variable(typeof(TestException));
@@ -710,15 +835,7 @@ namespace System.Linq.Expressions.Tests
             Assert.True(Expression.Lambda<Func<bool>>(tryExp).Compile(useInterpreter)());
         }
 
-        [Fact]
-        [ActiveIssue(3838)]
-        public void FilterOverwiteExceptionVisibleToHandlerCompiler()
-        {
-            FilterOverwiteExceptionVisibleToHandler(false);
-        }
-
-        [Theory]
-        [InlineData(true)]
+        [Theory, ClassData(typeof(CompilationTypes))]
         public void FilterOverwriteExceptionNotVisibleToNextFilterOrHandler(bool useInterpreter)
         {
             ParameterExpression exception = Expression.Variable(typeof(TestException));
@@ -741,15 +858,7 @@ namespace System.Linq.Expressions.Tests
             Assert.Equal(24, Expression.Lambda<Func<int>>(tryExp).Compile(useInterpreter)());
         }
 
-        [Fact]
-        [ActiveIssue(3838)]
-        public void FilterOverwriteExceptionNotVisibleToNextFilterOrHandlerCompiler()
-        {
-            FilterOverwriteExceptionNotVisibleToNextFilterOrHandler(false);
-        }
-
-        [Theory]
-        [InlineData(true)]
+        [Theory, ClassData(typeof(CompilationTypes))]
         public void FilterBeforeInnerFinally(bool useInterpreter)
         {
             StringBuilder sb = new StringBuilder();
@@ -797,14 +906,7 @@ namespace System.Linq.Expressions.Tests
             Assert.Equal("ACBD", func().ToString());
         }
 
-        [Fact]
-        [ActiveIssue(3838)]
-        public void FilterBeforeInnerFinallyCompiled()
-        {
-            FilterBeforeInnerFinally(false);
-        }
-
-        [Theory, InlineData(true)]
+        [Theory, ClassData(typeof(CompilationTypes))]
         public void FilterBeforeInnerFault(bool useInterpreter)
         {
             StringBuilder sb = new StringBuilder();
@@ -828,14 +930,7 @@ namespace System.Linq.Expressions.Tests
             Assert.Equal("ACBD", func().ToString());
         }
 
-        [Fact, ActiveIssue(3838)]
-        public void FilterBeforeInnerFaultCompiled()
-        {
-            FilterBeforeInnerFault(false);
-        }
-
-        [Theory]
-        [InlineData(true)]
+        [Theory, ClassData(typeof(CompilationTypes))]
         public void ExceptionThrownInFilter(bool useInterpreter)
         {
             // An exception in a filter should be eaten and the filter fail.
@@ -856,13 +951,6 @@ namespace System.Linq.Expressions.Tests
             Assert.Equal(9, func());
         }
 
-        [Fact]
-        [ActiveIssue(3838)]
-        public void ExceptionThrownInFilterCompiled()
-        {
-            ExceptionThrownInFilter(false);
-        }
-
         private bool MethodWithManyArguments(
             int x, int y, int z,
             int α, int β, int γ, int δ,
@@ -873,8 +961,7 @@ namespace System.Linq.Expressions.Tests
             return returnBack;
         }
 
-        [Theory]
-        [InlineData(true)]
+        [Theory, ClassData(typeof(CompilationTypes))]
         public void DeepExceptionFilter(bool useInterpreter)
         {
             // An expression where the deepest use of the stack is within filters.
@@ -937,19 +1024,11 @@ namespace System.Linq.Expressions.Tests
             Assert.Equal(2, func());
         }
 
-        [Fact]
-        [ActiveIssue(3838)]
-        public void DeepExceptionFilterCompiled()
-        {
-            DeepExceptionFilter(false);
-        }
-
-        [Theory]
-        [InlineData(true)]
+        [Theory, ClassData(typeof(CompilationTypes))]
         public void JumpOutOfExceptionFilter(bool useInterpreter)
         {
             LabelTarget target = Expression.Label();
-            var tryExp = Expression.Lambda<Func<int>>(
+            Expression<Func<int>> tryExp = Expression.Lambda<Func<int>>(
                 Expression.TryCatch(
                     Expression.Throw(Expression.Constant(new TestException()), typeof(int)),
                     Expression.Catch(
@@ -968,11 +1047,36 @@ namespace System.Linq.Expressions.Tests
             Assert.Throws<InvalidOperationException>(() => tryExp.Compile(useInterpreter));
         }
 
-        [Fact]
-        [ActiveIssue(3838)]
-        public void JumpOutOfExceptionFilterCompiled()
+        [Theory, ClassData(typeof(CompilationTypes))]
+        public void JumpOutOfFinally(bool useInterpreter)
         {
-            JumpOutOfExceptionFilter(false);
+            LabelTarget target = Expression.Label();
+            Expression<Func<int>> tryExp = Expression.Lambda<Func<int>>(
+                Expression.Block(
+                    Expression.Label(target),
+                    Expression.TryFinally(
+                        Expression.Throw(Expression.Constant(new TestException()), typeof(int)),
+                            Expression.Block(
+                                Expression.Goto(target),
+                                Expression.Constant(true)
+                                )
+                            )
+                        )
+                    );
+            Assert.Throws<InvalidOperationException>(() => tryExp.Compile(useInterpreter));
+        }
+
+        [Theory, ClassData(typeof(CompilationTypes))]
+        public void JumpIntoTry(bool useInterpreter)
+        {
+            LabelTarget target = Expression.Label();
+            Expression<Action> tryExp = Expression.Lambda<Action>(
+                Expression.Block(
+                    Expression.Goto(target),
+                    Expression.TryFinally(
+                        Expression.Label(target),
+                        Expression.Empty())));
+            Assert.Throws<InvalidOperationException>(() => tryExp.Compile(useInterpreter));
         }
 
         [Fact]
@@ -1160,7 +1264,6 @@ namespace System.Linq.Expressions.Tests
         }
 
         [Fact]
-        [ActiveIssue(3958)]
         public void UpdateTrySameChildrenDifferentCollectionsSameNode()
         {
             TryExpression tryExp = Expression.TryCatchFinally(Expression.Empty(), Expression.Empty(), Expression.Catch(typeof(Exception), Expression.Empty()));
@@ -1183,6 +1286,15 @@ namespace System.Linq.Expressions.Tests
         {
             TryExpression tryExp = Expression.TryCatchFinally(Expression.Empty(), Expression.Empty(), Expression.Catch(typeof(Exception), Expression.Empty()));
             Assert.NotSame(tryExp, tryExp.Update(tryExp.Body, new[] { Expression.Catch(typeof(Exception), Expression.Empty()) }, tryExp.Finally, null));
+        }
+
+        [Fact]
+        public void UpdateDoesntRepeatEnumeration()
+        {
+            TryExpression tryExp = Expression.TryCatchFinally(Expression.Empty(), Expression.Empty(), Expression.Catch(typeof(Exception), Expression.Empty()));
+            IEnumerable<CatchBlock> newHandlers =
+                new RunOnceEnumerable<CatchBlock>(new[] {Expression.Catch(typeof(Exception), Expression.Empty())});
+            Assert.NotSame(tryExp, tryExp.Update(tryExp.Body, newHandlers, tryExp.Finally, null));
         }
 
         [Fact]
@@ -1232,6 +1344,33 @@ namespace System.Linq.Expressions.Tests
             Assert.Throws<ArgumentException>("type", () => Expression.Catch(typeof(int).MakeByRefType(), Expression.Constant(0)));
             Assert.Throws<ArgumentException>("type", () => Expression.Catch(typeof(int).MakeByRefType(), Expression.Constant(0), Expression.Constant(true)));
             Assert.Throws<ArgumentException>("type", () => Expression.MakeCatchBlock(typeof(int).MakeByRefType(), null, Expression.Constant(0), null));
+        }
+
+        [Fact]
+        public void ToStringTest()
+        {
+            UnaryExpression e1 = Expression.Throw(Expression.Parameter(typeof(Exception), "ex"));
+            Assert.Equal("throw(ex)", e1.ToString());
+
+            TryExpression e2 = Expression.TryFinally(Expression.Empty(), Expression.Empty());
+            Assert.Equal("try { ... }", e2.ToString());
+
+            TryExpression e3 = Expression.TryFault(Expression.Empty(), Expression.Empty());
+            Assert.Equal("try { ... }", e3.ToString());
+
+            TryExpression e4 = Expression.TryCatch(Expression.Empty(), Expression.Catch(typeof(Exception), Expression.Empty()));
+            Assert.Equal("try { ... }", e4.ToString());
+
+            CatchBlock e5 = Expression.Catch(typeof(Exception), Expression.Empty());
+            Assert.Equal("catch (Exception) { ... }", e5.ToString());
+
+            CatchBlock e6 = Expression.Catch(Expression.Parameter(typeof(Exception), "ex"), Expression.Empty());
+            Assert.Equal("catch (Exception ex) { ... }", e6.ToString());
+
+            // NB: No ToString form for filters
+
+            CatchBlock e7 = Expression.Catch(Expression.Parameter(typeof(Exception), "ex"), Expression.Empty(), Expression.Constant(true));
+            Assert.Equal("catch (Exception ex) { ... }", e7.ToString());
         }
     }
 }

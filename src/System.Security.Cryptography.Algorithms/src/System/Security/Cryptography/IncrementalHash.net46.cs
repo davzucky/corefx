@@ -13,8 +13,6 @@ namespace System.Security.Cryptography
     {
         private const int NTE_BAD_ALGID = unchecked((int)0x80090008);
 
-        private static readonly byte[] s_empty = new byte[0];
-
         private readonly HashAlgorithmName _algorithmName;
         private HashAlgorithm _hash;
         private bool _disposed;
@@ -116,7 +114,7 @@ namespace System.Security.Cryptography
                 _hash.Initialize();
             }
 
-            _hash.TransformFinalBlock(s_empty, 0, 0);
+            _hash.TransformFinalBlock(Array.Empty<byte>(), 0, 0);
 
             byte[] hashValue = _hash.Hash;
             _resetPending = true;
@@ -192,6 +190,8 @@ namespace System.Security.Cryptography
             return new IncrementalHash(hashAlgorithm, GetHMAC(hashAlgorithm, key));
         }
 
+        [System.Diagnostics.CodeAnalysis.SuppressMessage("Microsoft.Security", "CA5351", Justification = "MD5 is used when the user asks for it.")]
+        [System.Diagnostics.CodeAnalysis.SuppressMessage("Microsoft.Security", "CA5350", Justification = "SHA1 is used when the user asks for it.")]
         private static HashAlgorithm GetHashAlgorithm(HashAlgorithmName hashAlgorithm)
         {
             if (hashAlgorithm == HashAlgorithmName.MD5)
@@ -208,7 +208,8 @@ namespace System.Security.Cryptography
             throw new CryptographicException(NTE_BAD_ALGID);
         }
 
-        [System.Diagnostics.CodeAnalysis.SuppressMessage("Microsoft.Security", "CA5351")] // We are providing the implementations for these algorithms
+        [System.Diagnostics.CodeAnalysis.SuppressMessage("Microsoft.Security", "CA5351", Justification = "MD5 is used when the user asks for it.")]
+        [System.Diagnostics.CodeAnalysis.SuppressMessage("Microsoft.Security", "CA5350", Justification = "SHA1 is used when the user asks for it.")]
         private static HashAlgorithm GetHMAC(HashAlgorithmName hashAlgorithm, byte[] key)
         {
             if (hashAlgorithm == HashAlgorithmName.MD5)

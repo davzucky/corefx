@@ -18,6 +18,7 @@ internal static partial class Interop
         internal const string ProcUptimeFilePath = RootPath + "uptime";
         private const string StatFileName = "/stat";
         private const string MapsFileName = "/maps";
+        private const string FileDescriptorDirectoryName = "/fd/";
         private const string TaskDirectoryName = "/task/";
 
         internal struct ParsedStat
@@ -54,7 +55,7 @@ internal static partial class Interop
             internal ulong rsslim;
             //internal ulong startcode;
             //internal ulong endcode;
-            internal ulong startstack;
+            //internal ulong startstack;
             //internal ulong kstkesp;
             //internal ulong kstkeip;
             //internal ulong signal;
@@ -92,6 +93,11 @@ internal static partial class Interop
         internal static string GetTaskDirectoryPathForProcess(int pid)
         {
             return RootPath + pid.ToString(CultureInfo.InvariantCulture) + TaskDirectoryName;
+        }
+
+        internal static string GetFileDescriptorDirectoryPathForProcess(int pid)
+        {
+            return RootPath + pid.ToString(CultureInfo.InvariantCulture) + FileDescriptorDirectoryName;
         }
 
         internal static IEnumerable<ParsedMapsModule> ParseMapsModules(int pid)
@@ -161,7 +167,7 @@ internal static partial class Interop
                 {
                     continue;
                 }
-                string pathname = parser.ExtractCurrent();
+                string pathname = parser.ExtractCurrentToEnd();
 
                 // We only get here if a we have a non-empty pathname and
                 // the permissions included both readability and executability.
@@ -191,11 +197,14 @@ internal static partial class Interop
         internal static bool TryReadStatFile(int pid, int tid, out ParsedStat result, ReusableTextReader reusableReader)
         {
             bool b = TryParseStatFile(GetStatFilePathForThread(pid, tid), out result, reusableReader);
-            Debug.Assert(!b || result.pid == tid, "Expected thread ID from stat file to match supplied tid");
+            //
+            // This assert currently fails in the Windows Subsystem For Linux.  See https://github.com/Microsoft/BashOnWindows/issues/967.
+            //
+            //Debug.Assert(!b || result.pid == tid, "Expected thread ID from stat file to match supplied tid");
             return b;
         }
 
-        private static bool TryParseStatFile(string statFilePath, out ParsedStat result, ReusableTextReader reusableReader)
+        internal static bool TryParseStatFile(string statFilePath, out ParsedStat result, ReusableTextReader reusableReader)
         {
             string statFileContents;
             try
@@ -217,20 +226,7 @@ internal static partial class Interop
             var results = default(ParsedStat);
 
             results.pid = parser.ParseNextInt32();
-            results.comm = parser.ParseRaw(delegate (string str, ref int startIndex, ref int endIndex)
-            {
-                if (str[startIndex] == '(')
-                {
-                    int i;
-                    for (i = endIndex; i < str.Length && str[i - 1] != ')'; i++) ;
-                    if (str[i - 1] == ')')
-                    {
-                        endIndex = i;
-                        return str.Substring(startIndex + 1, i - startIndex - 2);
-                    }
-                }
-                throw new InvalidDataException();
-            });
+            results.comm = parser.MoveAndExtractNextInOuterParens();
             results.state = parser.ParseNextChar();
             parser.MoveNextOrFail(); // ppid
             parser.MoveNextOrFail(); // pgrp
@@ -254,9 +250,6 @@ internal static partial class Interop
             results.vsize = parser.ParseNextUInt64();
             results.rss = parser.ParseNextInt64();
             results.rsslim = parser.ParseNextUInt64();
-            parser.MoveNextOrFail(); // startcode
-            parser.MoveNextOrFail(); // endcode
-            results.startstack = parser.ParseNextUInt64();
 
             // The following lines are commented out as there's no need to parse through
             // the rest of the entry (we've gotten all of the data we need).  Should any
@@ -264,6 +257,9 @@ internal static partial class Interop
             // through and including the one that's needed.  For now, these are being left 
             // commented to document what's available in the remainder of the entry.
 
+            //parser.MoveNextOrFail(); // startcode
+            //parser.MoveNextOrFail(); // endcode
+            //parser.MoveNextOrFail(); // startstack
             //parser.MoveNextOrFail(); // kstkesp
             //parser.MoveNextOrFail(); // kstkeip
             //parser.MoveNextOrFail(); // signal

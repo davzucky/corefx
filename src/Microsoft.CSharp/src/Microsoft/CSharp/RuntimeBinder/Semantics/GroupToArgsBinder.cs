@@ -15,9 +15,9 @@ namespace Microsoft.CSharp.RuntimeBinder.Semantics
     // to the best applicable method in the group.
     // ----------------------------------------------------------------------------
 
-    internal partial class ExpressionBinder
+    internal sealed partial class ExpressionBinder
     {
-        internal class GroupToArgsBinder
+        internal sealed class GroupToArgsBinder
         {
             private enum Result
             {
@@ -26,14 +26,14 @@ namespace Microsoft.CSharp.RuntimeBinder.Semantics
                 Failure_NoSearchForExpanded
             }
 
-            private ExpressionBinder _pExprBinder;
+            private readonly ExpressionBinder _pExprBinder;
             private bool _fCandidatesUnsupported;
-            private BindingFlag _fBindFlags;
-            private EXPRMEMGRP _pGroup;
-            private ArgInfos _pArguments;
-            private ArgInfos _pOriginalArguments;
-            private bool _bHasNamedArguments;
-            private AggregateType _pDelegate;
+            private readonly BindingFlag _fBindFlags;
+            private readonly EXPRMEMGRP _pGroup;
+            private readonly ArgInfos _pArguments;
+            private readonly ArgInfos _pOriginalArguments;
+            private readonly bool _bHasNamedArguments;
+            private readonly AggregateType _pDelegate;
             private AggregateType _pCurrentType;
             private MethodOrPropertySymbol _pCurrentSym;
             private TypeArray _pCurrentTypeArgs;
@@ -41,17 +41,17 @@ namespace Microsoft.CSharp.RuntimeBinder.Semantics
             private TypeArray _pBestParameters;
             private int _nArgBest;
             // Keep track of the first 20 or so syms with the wrong arg count.
-            private SymWithType[] _swtWrongCount = new SymWithType[20];
+            private readonly SymWithType[] _swtWrongCount = new SymWithType[20];
             private int _nWrongCount;
             private bool _bIterateToEndOfNsList;               // we have found an appliacable extension method only itereate to 
             // end of current namespaces extension method list
             private bool _bBindingCollectionAddArgs;           // Report parameter modifiers as error 
-            private GroupToArgsBinderResult _results;
-            private List<CandidateFunctionMember> _methList;
-            private MethPropWithInst _mpwiParamTypeConstraints;
-            private MethPropWithInst _mpwiBogus;
-            private MethPropWithInst _mpwiCantInferInstArg;
-            private MethWithType _mwtBadArity;
+            private readonly GroupToArgsBinderResult _results;
+            private readonly List<CandidateFunctionMember> _methList;
+            private readonly MethPropWithInst _mpwiParamTypeConstraints;
+            private readonly MethPropWithInst _mpwiBogus;
+            private readonly MethPropWithInst _mpwiCantInferInstArg;
+            private readonly MethWithType _mwtBadArity;
             private Name _pInvalidSpecifiedName;
             private Name _pNameUsedInPositionalArgument;
             private Name _pDuplicateSpecifiedName;
@@ -59,7 +59,7 @@ namespace Microsoft.CSharp.RuntimeBinder.Semantics
             // implements as being hidden. We also want to mark object as being hidden. So stick them
             // all in this list, and then for subsequent types, if they're in this list, then we
             // ignore them.
-            private List<CType> _HiddenTypes;
+            private readonly List<CType> _HiddenTypes;
             private bool _bArgumentsChangedForNamedOrOptionalArguments;
 
             public GroupToArgsBinder(ExpressionBinder exprBinder, BindingFlag bindFlags, EXPRMEMGRP grp, ArgInfos args, ArgInfos originalArgs, bool bHasNamedArguments, AggregateType atsDelegate)
@@ -139,7 +139,7 @@ namespace Microsoft.CSharp.RuntimeBinder.Semantics
             {
                 return _pExprBinder.GetErrorContext();
             }
-            public static CType GetTypeQualifier(EXPRMEMGRP pGroup)
+            private static CType GetTypeQualifier(EXPRMEMGRP pGroup)
             {
                 Debug.Assert(pGroup != null);
 
@@ -183,7 +183,6 @@ namespace Microsoft.CSharp.RuntimeBinder.Semantics
                 while (true)
                 {
                     bool bFoundExpanded;
-                    Result currentTypeArgsResult;
 
                     bFoundExpanded = false;
                     if (bSearchForExpanded && !fExpanded)
@@ -261,7 +260,7 @@ namespace Microsoft.CSharp.RuntimeBinder.Semantics
                     }
 
                     // Get the current type args.
-                    currentTypeArgsResult = DetermineCurrentTypeArgs();
+                    Result currentTypeArgsResult = DetermineCurrentTypeArgs();
                     if (currentTypeArgsResult != Result.Success)
                     {
                         bSearchForExpanded = (currentTypeArgsResult == Result.Failure_SearchForExpanded);
@@ -368,10 +367,10 @@ namespace Microsoft.CSharp.RuntimeBinder.Semantics
             private bool GetResultOfBind(bool bReportErrors)
             {
                 // We looked at all the evidence, and we come to render the verdict:
-                CandidateFunctionMember pmethBest;
 
                 if (!_methList.IsEmpty())
                 {
+                    CandidateFunctionMember pmethBest;
                     if (_methList.Count == 1)
                     {
                         // We found the single best method to call.
@@ -680,7 +679,7 @@ namespace Microsoft.CSharp.RuntimeBinder.Semantics
                     MethodOrPropertySymbol pMethProp,
                     EXPR pObject)
             {
-                return FindMostDerivedMethod(GetSymbolLoader(), pMethProp, pObject != null ? pObject.type : null);
+                return FindMostDerivedMethod(GetSymbolLoader(), pMethProp, pObject?.type);
             }
 
             /////////////////////////////////////////////////////////////////////////////////
@@ -720,9 +719,10 @@ namespace Microsoft.CSharp.RuntimeBinder.Semantics
                 }
 
                 // Now get the slot method.
-                if (method.swtSlot != null && method.swtSlot.Meth() != null)
+                var slotMethod = method.swtSlot?.Meth();
+                if (slotMethod != null)
                 {
-                    method = method.swtSlot.Meth();
+                    method = slotMethod;
                 }
 
                 if (!pType.IsAggregateType())
@@ -760,7 +760,7 @@ namespace Microsoft.CSharp.RuntimeBinder.Semantics
 
                 // If we get here, it means we can have two cases: one is that we have 
                 // a delegate. This is because the delegate invoke method is virtual and is 
-                // an override, but we wont have the slots set up correctly, and will 
+                // an override, but we won't have the slots set up correctly, and will 
                 // not find the base type in the inheritance hierarchy. The second is that
                 // we're calling off of the base itself.
                 Debug.Assert(method.parent.IsAggregateSymbol());
@@ -773,7 +773,7 @@ namespace Microsoft.CSharp.RuntimeBinder.Semantics
             private bool HasOptionalParameters()
             {
                 MethodOrPropertySymbol methprop = FindMostDerivedMethod(_pCurrentSym, _pGroup.GetOptionalObject());
-                return methprop != null ? methprop.HasOptionalParameters() : false;
+                return methprop != null && methprop.HasOptionalParameters();
             }
 
             /////////////////////////////////////////////////////////////////////////////////

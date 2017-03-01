@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for more information.
 
-using System.Diagnostics.Contracts;
 using System.Threading.Tasks;
 using System.Threading;
 
@@ -43,7 +42,7 @@ namespace System.Runtime.WindowsRuntime.Internal
 
     internal class Helpers
     {
-        internal unsafe static void ZeroMemory(byte* src, long len)
+        internal static unsafe void ZeroMemory(byte* src, long len)
         {
             while (len-- > 0)
                 *(src + len) = 0;

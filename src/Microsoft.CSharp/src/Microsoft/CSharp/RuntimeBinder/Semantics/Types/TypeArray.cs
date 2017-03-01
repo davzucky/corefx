@@ -11,9 +11,9 @@ namespace Microsoft.CSharp.RuntimeBinder.Semantics
     /////////////////////////////////////////////////////////////////////////////////
     // Encapsulates a type list, including its size and metadata token.
 
-    internal class TypeArray
+    internal sealed class TypeArray
     {
-        private CType[] _items;
+        private readonly CType[] _items;
 
         public TypeArray(CType[] types)
         {

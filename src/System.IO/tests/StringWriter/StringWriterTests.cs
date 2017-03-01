@@ -236,10 +236,26 @@ namespace System.IO.Tests
         }
 
         [Fact]
-        public static void Disposed()
+        public static void Closed_DisposedExceptions()
+        {
+            StringWriter sw = new StringWriter();
+            sw.Close();
+            ValidateDisposedExceptions(sw);
+        }
+
+        [Fact]
+        public static void Disposed_DisposedExceptions()
         {
             StringWriter sw = new StringWriter();
             sw.Dispose();
+            ValidateDisposedExceptions(sw);
+        }
+
+        private static void ValidateDisposedExceptions(StringWriter sw)
+        {
+            Assert.Throws<ObjectDisposedException>(() => { sw.Write('a'); });
+            Assert.Throws<ObjectDisposedException>(() => { sw.Write(new char[10], 0, 1); });
+            Assert.Throws<ObjectDisposedException>(() => { sw.Write("abc"); });
         }
 
         [Fact]
@@ -372,6 +388,26 @@ namespace System.IO.Tests
             sw.WriteLineAsync(new char[] { 'H', 'e', 'l', 'l', 'o' });
 
             Assert.Equal("Hello" + Environment.NewLine, sw.ToString());
+        }
+
+        [Fact]
+        public async Task NullNewLineAsync()
+        {
+            using (MemoryStream ms = new MemoryStream())
+            {
+                string newLine;
+                using (StreamWriter sw = new StreamWriter(ms, Encoding.UTF8, 16, true))
+                {
+                    newLine = sw.NewLine;
+                    await sw.WriteLineAsync(default(string));
+                    await sw.WriteLineAsync(default(string));
+                }
+                ms.Seek(0, SeekOrigin.Begin);
+                using (StreamReader sr = new StreamReader(ms))
+                {
+                    Assert.Equal(newLine + newLine, await sr.ReadToEndAsync());
+                }
+            }
         }
     }
 }

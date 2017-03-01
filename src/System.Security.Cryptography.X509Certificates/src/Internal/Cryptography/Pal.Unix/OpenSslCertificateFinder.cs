@@ -239,6 +239,7 @@ namespace Internal.Cryptography.Pal
                 });
         }
 
+        [System.Diagnostics.CodeAnalysis.SuppressMessage("Microsoft.Security", "CA5350", Justification = "SHA1 is required for Compat")]
         public void FindBySubjectKeyIdentifier(byte[] keyIdentifier)
         {
             FindCore(
@@ -326,24 +327,25 @@ namespace Internal.Cryptography.Pal
             {
                 // This needs to be kept in sync with VerifyCertificateIgnoringErrors in the
                 // Windows PAL version (and potentially any other PALs that come about)
-                X509Chain chain = new X509Chain
+                using (X509Chain chain = new X509Chain
                 {
                     ChainPolicy =
                     {
                         RevocationMode = X509RevocationMode.NoCheck,
                         RevocationFlag = X509RevocationFlag.ExcludeRoot
                     }
-                };
-
-                bool valid = chain.Build(cert);
-                int elementCount = chain.ChainElements.Count;
-
-                for (int i = 0; i < elementCount; i++)
+                })
                 {
-                    chain.ChainElements[i].Certificate.Dispose();
-                }
+                    bool valid = chain.Build(cert);
+                    int elementCount = chain.ChainElements.Count;
 
-                return valid;
+                    for (int i = 0; i < elementCount; i++)
+                    {
+                        chain.ChainElements[i].Certificate.Dispose();
+                    }
+
+                    return valid;
+                }
             }
             catch (CryptographicException)
             {

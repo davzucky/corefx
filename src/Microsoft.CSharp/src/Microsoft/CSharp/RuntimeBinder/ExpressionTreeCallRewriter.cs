@@ -12,30 +12,30 @@ using Microsoft.CSharp.RuntimeBinder.Semantics;
 
 namespace Microsoft.CSharp.RuntimeBinder
 {
-    internal class ExpressionTreeCallRewriter : ExprVisitorBase
+    internal sealed class ExpressionTreeCallRewriter : ExprVisitorBase
     {
         /////////////////////////////////////////////////////////////////////////////////
         // Members
 
-        private class ExpressionEXPR : EXPR
+        private sealed class ExpressionEXPR : EXPR
         {
-            public Expression Expression;
+            public readonly Expression Expression;
             public ExpressionEXPR(Expression e)
             {
                 Expression = e;
             }
         }
 
-        private Dictionary<EXPRCALL, Expression> _DictionaryOfParameters;
-        private IEnumerable<Expression> _ListOfParameters;
-        private TypeManager _typeManager;
+        private readonly Dictionary<EXPRCALL, Expression> _DictionaryOfParameters;
+        private readonly IEnumerable<Expression> _ListOfParameters;
+        private readonly TypeManager _typeManager;
         // Counts how many EXPRSAVEs we've encountered so we know which index into the 
         // parameter list we should be taking.
         private int _currentParameterIndex;
 
         /////////////////////////////////////////////////////////////////////////////////
 
-        protected ExpressionTreeCallRewriter(TypeManager typeManager, IEnumerable<Expression> listOfParameters)
+        private ExpressionTreeCallRewriter(TypeManager typeManager, IEnumerable<Expression> listOfParameters)
         {
             _typeManager = typeManager;
             _DictionaryOfParameters = new Dictionary<EXPRCALL, Expression>();
@@ -405,13 +405,13 @@ namespace Microsoft.CSharp.RuntimeBinder
             // This is to ensure that for embedded nopia types, we have the
             // appropriate local type from the member itself; this is possible
             // because nopia types are not generic or nested.
-            if (!t.GetTypeInfo().IsGenericType && !t.GetTypeInfo().IsNested)
+            if (!t.IsGenericType && !t.IsNested)
             {
                 t = f.DeclaringType;
             }
 
             // Now find the generic'ed one if we're generic.
-            if (t.GetTypeInfo().IsGenericType)
+            if (t.IsGenericType)
             {
                 f = t.GetField(f.Name, BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static);
             }
@@ -881,7 +881,7 @@ namespace Microsoft.CSharp.RuntimeBinder
                     underlyingType = underlyingType.getAggregate().GetUnderlyingType();
                 }
 
-                switch (underlyingType.AssociatedSystemType.GetTypeCode())
+                switch (Type.GetTypeCode(underlyingType.AssociatedSystemType))
                 {
                     case TypeCode.Boolean:
                         objval = val.boolVal;
@@ -943,7 +943,7 @@ namespace Microsoft.CSharp.RuntimeBinder
                 {
                     return GetObject(pExpr.asZEROINIT().OptionalArgument);
                 }
-                return System.Activator.CreateInstance(pExpr.type.AssociatedSystemType);
+                return Activator.CreateInstance(pExpr.type.AssociatedSystemType);
             }
 
             Debug.Assert(false, "Invalid EXPR in GetObject");
@@ -999,7 +999,7 @@ namespace Microsoft.CSharp.RuntimeBinder
             // This is to ensure that for embedded nopia types, we have the
             // appropriate local type from the member itself; this is possible
             // because nopia types are not generic or nested.
-            if (!type.GetTypeInfo().IsGenericType && !type.IsNested)
+            if (!type.IsGenericType && !type.IsNested)
             {
                 type = methodInfo.DeclaringType;
             }
@@ -1034,7 +1034,7 @@ namespace Microsoft.CSharp.RuntimeBinder
                 {
                     if (m.IsGenericMethod)
                     {
-                        int size = methinfo.Method.TypeArgs != null ? methinfo.Method.TypeArgs.size : 0;
+                        int size = methinfo.Method.TypeArgs?.size ?? 0;
                         Type[] typeArgs = new Type[size];
                         if (size > 0)
                         {
@@ -1071,7 +1071,7 @@ namespace Microsoft.CSharp.RuntimeBinder
             // This is to ensure that for embedded nopia types, we have the
             // appropriate local type from the member itself; this is possible
             // because nopia types are not generic or nested.
-            if (!type.GetTypeInfo().IsGenericType && !type.IsNested)
+            if (!type.IsGenericType && !type.IsNested)
             {
                 type = ctorInfo.DeclaringType;
             }
@@ -1127,7 +1127,7 @@ namespace Microsoft.CSharp.RuntimeBinder
             // This is to ensure that for embedded nopia types, we have the
             // appropriate local type from the member itself; this is possible
             // because nopia types are not generic or nested.
-            if (!type.GetTypeInfo().IsGenericType && !type.IsNested)
+            if (!type.IsGenericType && !type.IsNested)
             {
                 type = propertyInfo.DeclaringType;
             }

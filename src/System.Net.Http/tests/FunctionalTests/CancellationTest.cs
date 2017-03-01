@@ -22,6 +22,7 @@ namespace System.Net.Http.Functional.Tests
             _output = output;
         }
 
+        [ActiveIssue(10504)]
         [OuterLoop] // includes seconds of delay
         [Theory]
         [InlineData(false, false)]
@@ -55,6 +56,8 @@ namespace System.Net.Http.Functional.Tests
                         await Task.Delay(1000);
                         triggerRequestCancel.SetResult(true); // allow request to cancel
                         await triggerResponseWrite.Task; // pause until we're released
+                        
+                        return null;
                     });
 
                     var stopwatch = Stopwatch.StartNew();
@@ -74,7 +77,7 @@ namespace System.Net.Http.Functional.Tests
             }
         }
 
-        [ActiveIssue(9075, PlatformID.AnyUnix)] // recombine this test into the subsequent one when issue is fixed
+        [ActiveIssue(9075, TestPlatforms.AnyUnix)] // recombine this test into the subsequent one when issue is fixed
         [OuterLoop] // includes seconds of delay
         [Fact]
         public Task ReadAsStreamAsync_ReadAsync_Cancel_BodyNeverStarted_TaskCanceledQuickly()
@@ -104,6 +107,8 @@ namespace System.Net.Http.Functional.Tests
                             (startResponseBody ? "20 bytes of the body" : ""));
 
                         await triggerResponseWrite.Task; // pause until we're released
+                        
+                        return null;
                     });
 
                     using (HttpResponseMessage response = await client.GetAsync(url, HttpCompletionOption.ResponseHeadersRead))

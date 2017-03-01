@@ -21,7 +21,7 @@ namespace System.IO.Compression.Tests
         [InlineData("unicode.zip", "unicode")]
         public static async Task UpdateReadNormal(string zipFile, string zipFolder)
         {
-            IsZipSameAsDir(await StreamHelpers.CreateTempCopyStream(zfile(zipFile)), zfolder(zipFolder), ZipArchiveMode.Update, false, false);
+            IsZipSameAsDir(await StreamHelpers.CreateTempCopyStream(zfile(zipFile)), zfolder(zipFolder), ZipArchiveMode.Update, requireExplicit: true, checkTimes: true);
         }
 
         [Fact]
@@ -30,7 +30,7 @@ namespace System.IO.Compression.Tests
             using (ZipArchive archive = new ZipArchive(await StreamHelpers.CreateTempCopyStream(zfile("small.zip")), ZipArchiveMode.Update))
             {
                 ZipArchiveEntry entry = archive.Entries[0];
-                String contents1, contents2;
+                string contents1, contents2;
                 using (StreamReader s = new StreamReader(entry.Open()))
                 {
                     contents1 = s.ReadToEnd();
@@ -50,7 +50,7 @@ namespace System.IO.Compression.Tests
         {
             var zs = new LocalMemoryStream();
             await CreateFromDir(zfolder(zipFolder), zs, ZipArchiveMode.Update);
-            IsZipSameAsDir(zs.Clone(), zfolder(zipFolder), ZipArchiveMode.Read, false, false);
+            IsZipSameAsDir(zs.Clone(), zfolder(zipFolder), ZipArchiveMode.Read, requireExplicit: true, checkTimes: true);
         }
 
         [Theory]
@@ -58,8 +58,8 @@ namespace System.IO.Compression.Tests
         [InlineData(ZipArchiveMode.Update)]
         public static void EmptyEntryTest(ZipArchiveMode mode)
         {
-            String data1 = "test data written to file.";
-            String data2 = "more test data written to file.";
+            string data1 = "test data written to file.";
+            string data2 = "more test data written to file.";
             DateTimeOffset lastWrite = new DateTimeOffset(1992, 4, 5, 12, 00, 30, new TimeSpan(-5, 0, 0));
 
             var baseline = new LocalMemoryStream();
@@ -131,7 +131,7 @@ namespace System.IO.Compression.Tests
                 orig.Delete();
             }
 
-            IsZipSameAsDir(testArchive, zmodified("deleteMove"), ZipArchiveMode.Read, false, false);
+            IsZipSameAsDir(testArchive, zmodified("deleteMove"), ZipArchiveMode.Read, requireExplicit: true, checkTimes: true);
 
         }
         [Fact]
@@ -155,7 +155,7 @@ namespace System.IO.Compression.Tests
                 e.LastWriteTime = file.LastModifiedDate;
             }
 
-            IsZipSameAsDir(testArchive, zmodified("append"), ZipArchiveMode.Read, false, false);
+            IsZipSameAsDir(testArchive, zmodified("append"), ZipArchiveMode.Read, requireExplicit: true, checkTimes: true);
 
         }
         [Fact]
@@ -166,7 +166,7 @@ namespace System.IO.Compression.Tests
 
             using (ZipArchive archive = new ZipArchive(testArchive, ZipArchiveMode.Update, true))
             {
-                String fileName = zmodified(Path.Combine("overwrite", "first.txt"));
+                string fileName = zmodified(Path.Combine("overwrite", "first.txt"));
                 ZipArchiveEntry e = archive.GetEntry("first.txt");
 
                 var file = FileData.GetFile(fileName);
@@ -182,7 +182,7 @@ namespace System.IO.Compression.Tests
                 }
             }
 
-            IsZipSameAsDir(testArchive, zmodified("overwrite"), ZipArchiveMode.Read, false, false);
+            IsZipSameAsDir(testArchive, zmodified("overwrite"), ZipArchiveMode.Read, requireExplicit: true, checkTimes: true);
         }
 
         [Fact]
@@ -196,7 +196,7 @@ namespace System.IO.Compression.Tests
                 await updateArchive(archive, zmodified(Path.Combine("addFile", "added.txt")), "added.txt");
             }
 
-            IsZipSameAsDir(testArchive, zmodified ("addFile"), ZipArchiveMode.Read, false, false);
+            IsZipSameAsDir(testArchive, zmodified ("addFile"), ZipArchiveMode.Read, requireExplicit: true, checkTimes: true);
         }
 
         [Fact]
@@ -212,7 +212,7 @@ namespace System.IO.Compression.Tests
                 await updateArchive(archive, zmodified(Path.Combine("addFile", "added.txt")), "added.txt");
             }
 
-            IsZipSameAsDir(testArchive, zmodified("addFile"), ZipArchiveMode.Read, false, false);
+            IsZipSameAsDir(testArchive, zmodified("addFile"), ZipArchiveMode.Read, requireExplicit: true, checkTimes: true);
         }
 
         [Fact]
@@ -228,10 +228,10 @@ namespace System.IO.Compression.Tests
                 var x = archive.Entries;
             }
 
-            IsZipSameAsDir(testArchive, zmodified("addFile"), ZipArchiveMode.Read, false, false);
+            IsZipSameAsDir(testArchive, zmodified("addFile"), ZipArchiveMode.Read, requireExplicit: true, checkTimes: true);
         }
 
-        private static async Task updateArchive(ZipArchive archive, String installFile, String entryName)
+        private static async Task updateArchive(ZipArchive archive, string installFile, string entryName)
         {
             ZipArchiveEntry e = archive.CreateEntry(entryName);
 
@@ -254,7 +254,7 @@ namespace System.IO.Compression.Tests
         {
             using (LocalMemoryStream ms = await LocalMemoryStream.readAppFileAsync(zfile("normal.zip")))
             {
-                ZipArchive target = new ZipArchive(ms, ZipArchiveMode.Update, true);
+                ZipArchive target = new ZipArchive(ms, ZipArchiveMode.Update, leaveOpen: true);
 
                 ZipArchiveEntry edeleted = target.GetEntry("first.txt");
 

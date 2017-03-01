@@ -4,6 +4,7 @@
 
 using System.Diagnostics;
 using System.Diagnostics.Contracts;
+using System.IO;
 using System.Runtime.InteropServices.WindowsRuntime;
 using System.Runtime.InteropServices;
 using System.Threading.Tasks;
@@ -26,15 +27,15 @@ namespace System.IO
 
         internal static IAsyncOperationWithProgress<IBuffer, UInt32> ReadAsync_MemoryStream(Stream stream, IBuffer buffer, UInt32 count)
         {
-            Contract.Requires(stream != null);
-            Contract.Requires(stream is MemoryStream);
-            Contract.Requires(stream.CanRead);
-            Contract.Requires(stream.CanSeek);
-            Contract.Requires(buffer != null);
-            Contract.Requires(buffer is IBufferByteAccess);
-            Contract.Requires(0 <= count);
-            Contract.Requires(count <= Int32.MaxValue);
-            Contract.Requires(count <= buffer.Capacity);
+            Debug.Assert(stream != null);
+            Debug.Assert(stream is MemoryStream);
+            Debug.Assert(stream.CanRead);
+            Debug.Assert(stream.CanSeek);
+            Debug.Assert(buffer != null);
+            Debug.Assert(buffer is IBufferByteAccess);
+            Debug.Assert(0 <= count);
+            Debug.Assert(count <= Int32.MaxValue);
+            Debug.Assert(count <= buffer.Capacity);
             Contract.EndContractBlock();
 
             // We will return a different buffer to the user backed directly by the memory stream (avoids memory copy).
@@ -63,14 +64,14 @@ namespace System.IO
         internal static IAsyncOperationWithProgress<IBuffer, UInt32> ReadAsync_AbstractStream(Stream stream, IBuffer buffer, UInt32 count,
                                                                                               InputStreamOptions options)
         {
-            Contract.Requires(stream != null);
-            Contract.Requires(stream.CanRead);
-            Contract.Requires(buffer != null);
-            Contract.Requires(buffer is IBufferByteAccess);
-            Contract.Requires(0 <= count);
-            Contract.Requires(count <= Int32.MaxValue);
-            Contract.Requires(count <= buffer.Capacity);
-            Contract.Requires(options == InputStreamOptions.None || options == InputStreamOptions.Partial || options == InputStreamOptions.ReadAhead);
+            Debug.Assert(stream != null);
+            Debug.Assert(stream.CanRead);
+            Debug.Assert(buffer != null);
+            Debug.Assert(buffer is IBufferByteAccess);
+            Debug.Assert(0 <= count);
+            Debug.Assert(count <= Int32.MaxValue);
+            Debug.Assert(count <= buffer.Capacity);
+            Debug.Assert(options == InputStreamOptions.None || options == InputStreamOptions.Partial || options == InputStreamOptions.ReadAhead);
             Contract.EndContractBlock();
 
             Int32 bytesRequested = (Int32)count;
@@ -162,9 +163,9 @@ namespace System.IO
 
         internal static IAsyncOperationWithProgress<UInt32, UInt32> WriteAsync_AbstractStream(Stream stream, IBuffer buffer)
         {
-            Contract.Requires(stream != null);
-            Contract.Requires(stream.CanWrite);
-            Contract.Requires(buffer != null);
+            Debug.Assert(stream != null);
+            Debug.Assert(stream.CanWrite);
+            Debug.Assert(buffer != null);
             Contract.EndContractBlock();
 
             // Choose the optimal writing strategy for the kind of buffer supplied:
@@ -227,8 +228,8 @@ namespace System.IO
 
         internal static IAsyncOperation<Boolean> FlushAsync_AbstractStream(Stream stream)
         {
-            Contract.Requires(stream != null);
-            Contract.Requires(stream.CanWrite);
+            Debug.Assert(stream != null);
+            Debug.Assert(stream.CanWrite);
             Contract.EndContractBlock();
 
             Func<CancellationToken, Task<Boolean>> flushOperation = async (cancelToken) =>

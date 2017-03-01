@@ -27,7 +27,7 @@ namespace Internal.Cryptography.Pal
 
         public AsymmetricAlgorithm DecodePublicKey(Oid oid, byte[] encodedKeyValue, byte[] encodedParameters, ICertificatePal certificatePal)
         {
-            if (oid.Value == Oids.Ecc)
+            if (oid.Value == Oids.Ecc && certificatePal != null)
             {
                 return DecodeECDsaPublicKey((CertificatePal)certificatePal);
             }
@@ -149,12 +149,12 @@ namespace Internal.Cryptography.Pal
             int numBytesNeeded = 0;
             NTSTATUS ntStatus = Interop.BCrypt.BCryptExportKey(bCryptKeyHandle, IntPtr.Zero, blobFormatString, null, 0, out numBytesNeeded, 0);
             if (ntStatus != NTSTATUS.STATUS_SUCCESS)
-                throw new CryptographicException(Interop.mincore.GetMessage((int)ntStatus));
+                throw new CryptographicException(Interop.Kernel32.GetMessage((int)ntStatus));
 
             byte[] keyBlob = new byte[numBytesNeeded];
             ntStatus = Interop.BCrypt.BCryptExportKey(bCryptKeyHandle, IntPtr.Zero, blobFormatString, keyBlob, keyBlob.Length, out numBytesNeeded, 0);
             if (ntStatus != NTSTATUS.STATUS_SUCCESS)
-                throw new CryptographicException(Interop.mincore.GetMessage((int)ntStatus));
+                throw new CryptographicException(Interop.Kernel32.GetMessage((int)ntStatus));
 
             Array.Resize(ref keyBlob, numBytesNeeded);
             return keyBlob;
@@ -175,7 +175,7 @@ namespace Internal.Cryptography.Pal
             {
                 Debug.Assert(ecBlob.Length >= sizeof(Interop.BCrypt.BCRYPT_ECCKEY_BLOB));
 
-                fixed (byte* pEcBlob = ecBlob)
+                fixed (byte* pEcBlob = &ecBlob[0])
                 {
                     Interop.BCrypt.BCRYPT_ECCKEY_BLOB* pBcryptBlob = (Interop.BCrypt.BCRYPT_ECCKEY_BLOB*)pEcBlob;
 
@@ -341,7 +341,7 @@ namespace Internal.Cryptography.Pal
 
             unsafe
             {
-                fixed (byte* pValue = value)
+                fixed (byte* pValue = &value[0])
                 {
                     string valueAsString = Marshal.PtrToStringUni((IntPtr)pValue);
                     return valueAsString;

@@ -72,7 +72,7 @@ namespace System.Net.Security.Tests
         }
 
         [Fact]
-        public async Task ClientAsyncAuthenticate_UnsuportedAllClient_Fail()
+        public async Task ClientAsyncAuthenticate_UnsupportedAllClient_Fail()
         {
             await Assert.ThrowsAsync<NotSupportedException>(() =>
             {

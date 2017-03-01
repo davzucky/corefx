@@ -22,22 +22,21 @@ namespace System.Diagnostics.Tests
                 Assert.NotNull(module.FileName);
                 Assert.NotEmpty(module.FileName);
 
-                Assert.InRange(module.BaseAddress.ToInt64(), 0, long.MaxValue);
-                Assert.InRange(module.EntryPointAddress.ToInt64(), 0, long.MaxValue);
+                Assert.InRange(module.BaseAddress.ToInt64(), long.MinValue, long.MaxValue);
+                Assert.InRange(module.EntryPointAddress.ToInt64(), long.MinValue, long.MaxValue);
                 Assert.InRange(module.ModuleMemorySize, 0, long.MaxValue);
             }
         }
 
         [Fact]
-        [PlatformSpecific(PlatformID.AnyUnix)]
-        public void TestModulesContainsCorerun()
+        public void TestModulesContainsDotnet()
         {
             ProcessModuleCollection modules = Process.GetCurrentProcess().Modules;
-            Assert.Contains(modules.Cast<ProcessModule>(), m => m.FileName.Contains("corerun"));
+            Assert.Contains(modules.Cast<ProcessModule>(), m => m.FileName.Contains("dotnet"));
         }
 
         [Fact]
-        [PlatformSpecific(PlatformID.Linux)] // OSX only includes the main module
+        [PlatformSpecific(TestPlatforms.Linux)] // OSX only includes the main module
         public void TestModulesContainsUnixNativeLibs()
         {
             ProcessModuleCollection modules = Process.GetCurrentProcess().Modules;

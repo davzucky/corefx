@@ -5,6 +5,8 @@
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Diagnostics.Contracts;
+using System.Runtime.CompilerServices;
+using System.Runtime.Serialization;
 
 namespace System.Collections.Generic
 {
@@ -47,7 +49,8 @@ namespace System.Collections.Generic
     [DebuggerTypeProxy(typeof(ICollectionDebugView<>))]
     [DebuggerDisplay("Count = {Count}")]
     [SuppressMessage("Microsoft.Naming", "CA1710:IdentifiersShouldHaveCorrectSuffix", Justification = "By design")]
-    public class HashSet<T> : ICollection<T>, ISet<T>, IReadOnlyCollection<T>
+    [Serializable]
+    public class HashSet<T> : ICollection<T>, ISet<T>, IReadOnlyCollection<T>, ISerializable, IDeserializationCallback
     {
         // store lower 31 bits of hash code
         private const int Lower31BitMask = 0x7FFFFFFF;
@@ -60,6 +63,12 @@ namespace System.Collections.Generic
         // This is set to 3 because capacity is acceptable as 2x rounded up to nearest prime.
         private const int ShrinkThreshold = 3;
 
+        // constants for serialization
+        private const string CapacityName = "Capacity";
+        private const string ElementsName = "Elements";
+        private const string ComparerName = "Comparer";
+        private const string VersionName = "Version";
+
         private int[] _buckets;
         private Slot[] _slots;
         private int _count;
@@ -67,6 +76,8 @@ namespace System.Collections.Generic
         private int _freeList;
         private IEqualityComparer<T> _comparer;
         private int _version;
+
+        private SerializationInfo _siInfo; // temporary variable needed during deserialization
 
         #region Constructors
 
@@ -87,6 +98,10 @@ namespace System.Collections.Generic
             _freeList = -1;
             _version = 0;
         }
+
+        public HashSet(int capacity)
+            : this(capacity, EqualityComparer<T>.Default)
+        { }
 
         public HashSet(IEnumerable<T> collection)
             : this(collection, EqualityComparer<T>.Default)
@@ -129,6 +144,15 @@ namespace System.Collections.Generic
                     TrimExcess();
                 }
             }
+        }
+
+        protected HashSet(SerializationInfo info, StreamingContext context)
+        {
+            // We can't do anything with the keys and values until the entire graph has been 
+            // deserialized and we have a reasonable estimate that GetHashCode is not going to 
+            // fail.  For the time being, we'll just cache this.  The graph is not valid until 
+            // OnDeserialization has been called.
+            _siInfo = info;
         }
 
         // Initializes the HashSet from another HashSet with the same element type and
@@ -174,6 +198,21 @@ namespace System.Collections.Generic
                 _lastIndex = index;
             }
             _count = count;
+        }
+
+        public HashSet(int capacity, IEqualityComparer<T> comparer)
+            : this(comparer)
+        {
+            if (capacity < 0)
+            {
+                throw new ArgumentOutOfRangeException(nameof(capacity));
+            }
+            Contract.EndContractBlock();
+
+            if (capacity > 0)
+            {
+                Initialize(capacity);
+            }
         }
 
         #endregion
@@ -271,7 +310,10 @@ namespace System.Collections.Generic
                             _slots[last].next = _slots[i].next;
                         }
                         _slots[i].hashCode = -1;
-                        _slots[i].value = default(T);
+                        if (RuntimeHelpers.IsReferenceOrContainsReferences<T>())
+                        {
+                            _slots[i].value = default(T);
+                        }
                         _slots[i].next = _freeList;
 
                         _count--;
@@ -330,6 +372,74 @@ namespace System.Collections.Generic
 
         #endregion
 
+        #region ISerializable methods
+
+        public virtual void GetObjectData(SerializationInfo info, StreamingContext context)
+        {
+            if (info == null)
+            {
+                throw new ArgumentNullException(nameof(info));
+            }
+
+            info.AddValue(VersionName, _version); // need to serialize version to avoid problems with serializing while enumerating
+            info.AddValue(ComparerName, _comparer, typeof(IComparer<T>));
+            info.AddValue(CapacityName, _buckets == null ? 0 : _buckets.Length);
+
+            if (_buckets != null)
+            {
+                T[] array = new T[_count];
+                CopyTo(array);
+                info.AddValue(ElementsName, array, typeof(T[]));
+            }
+        }
+
+        #endregion
+
+        #region IDeserializationCallback methods
+
+        public virtual void OnDeserialization(Object sender)
+        {
+            if (_siInfo == null)
+            {
+                // It might be necessary to call OnDeserialization from a container if the 
+                // container object also implements OnDeserialization. We can return immediately
+                // if this function is called twice. Note we set _siInfo to null at the end of this method.
+                return;
+            }
+
+            int capacity = _siInfo.GetInt32(CapacityName);
+            _comparer = (IEqualityComparer<T>)_siInfo.GetValue(ComparerName, typeof(IEqualityComparer<T>));
+            _freeList = -1;
+
+            if (capacity != 0)
+            {
+                _buckets = new int[capacity];
+                _slots = new Slot[capacity];
+
+                T[] array = (T[])_siInfo.GetValue(ElementsName, typeof(T[]));
+
+                if (array == null)
+                {
+                    throw new SerializationException(SR.Serialization_MissingKeys);
+                }
+
+                // there are no resizes here because we already set capacity above
+                for (int i = 0; i < array.Length; i++)
+                {
+                    AddIfNotPresent(array[i]);
+                }
+            }
+            else
+            {
+                _buckets = null;
+            }
+
+            _version = _siInfo.GetInt32(VersionName);
+            _siInfo = null;
+        }
+
+        #endregion
+
         #region HashSet methods
 
         /// <summary>
@@ -341,6 +451,33 @@ namespace System.Collections.Generic
         public bool Add(T item)
         {
             return AddIfNotPresent(item);
+        }
+
+        /// <summary>
+        /// Searches the set for a given value and returns the equal value it finds, if any.
+        /// </summary>
+        /// <param name="equalValue">The value to search for.</param>
+        /// <param name="actualValue">The value from the set that the search found, or the original value if the search yielded no match.</param>
+        /// <returns>A value indicating whether the search was successful.</returns>
+        /// <remarks>
+        /// This can be useful when you want to reuse a previously stored reference instead of 
+        /// a newly constructed one (so that more sharing of references can occur) or to look up
+        /// a value that has more complete data than the value you currently have, although their
+        /// comparer functions indicate they are equal.
+        /// </remarks>
+        public bool TryGetValue(T equalValue, out T actualValue)
+        {
+            if (_buckets != null)
+            {
+                int i = InternalIndexOf(equalValue);
+                if (i >= 0)
+                {
+                    actualValue = _slots[i].value;
+                    return true;
+                }
+            }
+            actualValue = default(T);
+            return false;
         }
 
         /// <summary>
@@ -969,6 +1106,15 @@ namespace System.Collections.Generic
         #region Helper methods
 
         /// <summary>
+        /// Used for deep equality of HashSet testing
+        /// </summary>
+        /// <returns></returns>
+        public static IEqualityComparer<HashSet<T>> CreateSetComparer()
+        {
+            return new HashSetEqualityComparer<T>();
+        }
+
+        /// <summary>
         /// Initializes buckets and slots arrays. Uses suggested capacity by finding next prime
         /// greater than or equal to capacity.
         /// </summary>
@@ -1504,6 +1650,70 @@ namespace System.Collections.Generic
             return result;
         }
 
+
+        /// <summary>
+        /// Internal method used for HashSetEqualityComparer. Compares set1 and set2 according 
+        /// to specified comparer.
+        /// 
+        /// Because items are hashed according to a specific equality comparer, we have to resort
+        /// to n^2 search if they're using different equality comparers.
+        /// </summary>
+        /// <param name="set1"></param>
+        /// <param name="set2"></param>
+        /// <param name="comparer"></param>
+        /// <returns></returns>
+        internal static bool HashSetEquals(HashSet<T> set1, HashSet<T> set2, IEqualityComparer<T> comparer)
+        {
+            // handle null cases first
+            if (set1 == null)
+            {
+                return (set2 == null);
+            }
+            else if (set2 == null)
+            {
+                // set1 != null
+                return false;
+            }
+
+            // all comparers are the same; this is faster
+            if (AreEqualityComparersEqual(set1, set2))
+            {
+                if (set1.Count != set2.Count)
+                {
+                    return false;
+                }
+                // suffices to check subset
+                foreach (T item in set2)
+                {
+                    if (!set1.Contains(item))
+                    {
+                        return false;
+                    }
+                }
+                return true;
+            }
+            else
+            {  // n^2 search because items are hashed according to their respective ECs
+                foreach (T set2Item in set2)
+                {
+                    bool found = false;
+                    foreach (T set1Item in set1)
+                    {
+                        if (comparer.Equals(set2Item, set1Item))
+                        {
+                            found = true;
+                            break;
+                        }
+                    }
+                    if (!found)
+                    {
+                        return false;
+                    }
+                }
+                return true;
+            }
+        }
+
         /// <summary>
         /// Checks if equality comparers are equal. This is used for algorithms that can
         /// speed up if it knows the other item has unique elements. I.e. if they're using 
@@ -1547,6 +1757,7 @@ namespace System.Collections.Generic
             internal T value;
         }
 
+        [Serializable]
         public struct Enumerator : IEnumerator<T>, IEnumerator
         {
             private HashSet<T> _set;

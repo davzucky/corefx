@@ -3,8 +3,8 @@
 // See the LICENSE file in the project root for more information.
 
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
-using System.Diagnostics.Contracts;
 
 namespace System.Net.Http.Headers
 {
@@ -15,7 +15,7 @@ namespace System.Net.Http.Headers
         private static readonly Dictionary<string, HttpHeaderParser> s_parserStore = CreateParserStore();
         private static readonly HashSet<string> s_invalidHeaders = CreateInvalidHeaders();
 
-        private Func<long?> _calculateLengthFunc;
+        private readonly HttpContent _parent;
         private bool _contentLengthSet;
 
         private HttpHeaderValueCollection<string> _allow;
@@ -82,7 +82,7 @@ namespace System.Net.Http.Headers
                     // If we don't have a value for Content-Length in the store, try to let the content calculate
                     // it's length. If the content object is able to calculate the length, we'll store it in the
                     // store.
-                    long? calculatedLength = _calculateLengthFunc();
+                    long? calculatedLength = _parent.GetComputedOrBufferLength();
 
                     if (calculatedLength != null)
                     {
@@ -146,9 +146,9 @@ namespace System.Net.Http.Headers
             set { SetOrRemoveParsedValue(HttpKnownHeaderNames.LastModified, value); }
         }
 
-        internal HttpContentHeaders(Func<long?> calculateLengthFunc)
+        internal HttpContentHeaders(HttpContent parent)
         {
-            _calculateLengthFunc = calculateLengthFunc;
+            _parent = parent;
 
             SetConfiguration(s_parserStore, s_invalidHeaders);
         }
@@ -185,7 +185,7 @@ namespace System.Net.Http.Headers
 
         internal static void AddKnownHeaders(HashSet<string> headerSet)
         {
-            Contract.Requires(headerSet != null);
+            Debug.Assert(headerSet != null);
 
             headerSet.Add(HttpKnownHeaderNames.Allow);
             headerSet.Add(HttpKnownHeaderNames.ContentDisposition);

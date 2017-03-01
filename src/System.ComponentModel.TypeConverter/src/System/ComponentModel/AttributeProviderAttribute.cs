@@ -4,17 +4,12 @@
 
 namespace System.ComponentModel
 {
-    /// <include file='doc\AttributeProviderAttribute.uex' path='docs/doc[@for="AttributeProviderAttribute"]/*' />
     /// <summary>
     /// </summary>
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Microsoft.Performance", "CA1813:AvoidUnsealedAttributes")]
     [AttributeUsage(AttributeTargets.Property)]
     public class AttributeProviderAttribute : Attribute
     {
-        private readonly string _typeName;
-        private readonly string _propertyName;
-
-        /// <include file='doc\AttributeProviderAttribute.uex' path='docs/doc[@for="AttributeProviderAttribute.AttributeProviderAttribute"]/*' />
         /// <summary>
         ///     Creates a new AttributeProviderAttribute object.
         /// </summary>
@@ -25,10 +20,9 @@ namespace System.ComponentModel
                 throw new ArgumentNullException(nameof(typeName));
             }
 
-            _typeName = typeName;
+            TypeName = typeName;
         }
 
-        /// <include file='doc\AttributeProviderAttribute.uex' path='docs/doc[@for="AttributeProviderAttribute.AttributeProviderAttribute"]/*' />
         /// <summary>
         ///     Creates a new AttributeProviderAttribute object.
         /// </summary>
@@ -43,11 +37,10 @@ namespace System.ComponentModel
                 throw new ArgumentNullException(nameof(propertyName));
             }
 
-            _typeName = typeName;
-            _propertyName = propertyName;
+            TypeName = typeName;
+            PropertyName = propertyName;
         }
 
-        /// <include file='doc\AttributeProviderAttribute.uex' path='docs/doc[@for="AttributeProviderAttribute.AttributeProviderAttribute1"]/*' />
         /// <summary>
         ///     Creates a new AttributeProviderAttribute object.
         /// </summary>
@@ -58,33 +51,19 @@ namespace System.ComponentModel
                 throw new ArgumentNullException(nameof(type));
             }
 
-            _typeName = type.AssemblyQualifiedName;
+            TypeName = type.AssemblyQualifiedName;
         }
 
-        /// <include file='doc\AttributeProviderAttribute.uex' path='docs/doc[@for="AttributeProviderAttribute.TypeName"]/*' />
         /// <summary>
         ///     The TypeName property returns the assembly qualified type name 
         ///     passed into the constructor.
         /// </summary>
-        public string TypeName
-        {
-            get
-            {
-                return _typeName;
-            }
-        }
+        public string TypeName { get; }
 
-        /// <include file='doc\AttributeProviderAttribute.uex' path='docs/doc[@for="AttributeProviderAttribute.TypeName"]/*' />
         /// <summary>
         ///     The TypeName property returns the property name that will be used to query attributes from.
         /// </summary>
-        public string PropertyName
-        {
-            get
-            {
-                return _propertyName;
-            }
-        }
+        public string PropertyName { get; }
     }
 }
 
